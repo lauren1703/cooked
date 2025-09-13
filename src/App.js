@@ -312,6 +312,15 @@ function App() {
     }
   }, []);
 
+  const handleNewRecipe = useCallback(() => {
+    setImage(null);
+    setRecipe(null);
+    setCookingTime('');
+    setCuisineKeywords('');
+    setNewIngredient('');
+    setIsEditingIngredients(false);
+  }, []);
+
   return (
     <div className="app">
       <header className="header">
@@ -423,6 +432,14 @@ function App() {
               <span>⏱️ {recipe.cookingTime}</span>
               <span>⚡ {recipe.difficulty}</span>
             </div>
+            
+            <button 
+              className="new-recipe-btn"
+              onClick={handleNewRecipe}
+              title="Start a new recipe"
+            >
+              🍳 New Recipe
+            </button>
             
             <div className="recipe-details">
               <div className="ingredients">
