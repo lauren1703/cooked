@@ -22,22 +22,17 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [recipeRatings, setRecipeRatings] = useState({});
-  const [showWelcomeScreen, setShowWelcomeScreen] = useState(() => {
-    // Check if user has seen welcome screen before
-    return !localStorage.getItem('hasSeenWelcomeScreen');
-  });
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
 
   // Handle welcome screen actions
   const handleSignIn = () => {
     setShowWelcomeScreen(false);
-    localStorage.setItem('hasSeenWelcomeScreen', 'true');
     setCurrentPage('auth');
   };
 
   const handleContinueAsGuest = () => {
     setShowWelcomeScreen(false);
-    localStorage.setItem('hasSeenWelcomeScreen', 'true');
     setIsGuest(true);
     setCurrentPage('home');
   };
@@ -50,14 +45,11 @@ function App() {
       // User is authenticated
       setShowWelcomeScreen(false);
       setIsGuest(false);
-      localStorage.setItem('hasSeenWelcomeScreen', 'true');
     } else {
       // User is not authenticated - reset to guest mode
       setIsGuest(false);
-      // Don't show welcome screen if user has seen it before
-      if (localStorage.getItem('hasSeenWelcomeScreen')) {
-        setShowWelcomeScreen(false);
-      }
+      // Show welcome screen when user logs out
+      setShowWelcomeScreen(true);
     }
   }, [currentUser]);
 
