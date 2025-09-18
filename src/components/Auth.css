@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: transparent;
   padding: 20px;
 }
 
@@ -38,12 +38,16 @@
   margin: 0 0 8px 0;
   font-size: 28px;
   font-weight: 600;
+  background: none;
+  background-color: transparent;
 }
 
 .auth-header p {
   color: #666;
   margin: 0;
   font-size: 16px;
+  background: none;
+  background-color: transparent;
 }
 
 .error-message {
@@ -94,13 +98,13 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #E67E22;
+  box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
 }
 
 .auth-button {
   width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #E67E22 0%, #D35400 100%);
   color: white;
   border: none;
   padding: 14px 20px;
@@ -113,7 +117,7 @@
 
 .auth-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 20px rgba(230, 126, 34, 0.3);
 }
 
 .auth-button:disabled {
@@ -207,7 +211,7 @@
 .link-button {
   background: none;
   border: none;
-  color: #667eea;
+  color: #E67E22;
   cursor: pointer;
   font-size: inherit;
   font-weight: 500;
@@ -216,7 +220,7 @@
 }
 
 .link-button:hover {
-  color: #5a6fd8;
+  color: #D35400;
 }
 
 .reset-button {

@@ -279,13 +279,32 @@ function App() {
     setTimeout(() => setShowSuggestions(false), 200);
   }, []);
 
-  // Load recipe ratings from localStorage on component mount
+  // Load recipe ratings from localStorage and sync with Firestore bookmarks
   useEffect(() => {
     const savedRatings = localStorage.getItem('recipeRatings');
     if (savedRatings) {
       setRecipeRatings(JSON.parse(savedRatings));
     }
   }, []);
+
+  // Sync local ratings with Firestore bookmarks when bookmarks change
+  useEffect(() => {
+    if (bookmarks.length > 0) {
+      const firestoreRatings = {};
+      bookmarks.forEach(bookmark => {
+        if (bookmark.rating) {
+          firestoreRatings[bookmark.id] = bookmark.rating;
+        }
+      });
+      
+      // Merge Firestore ratings with local ratings (Firestore takes precedence)
+      setRecipeRatings(prevRatings => {
+        const mergedRatings = { ...prevRatings, ...firestoreRatings };
+        localStorage.setItem('recipeRatings', JSON.stringify(mergedRatings));
+        return mergedRatings;
+      });
+    }
+  }, [bookmarks]);
 
   const handleBookmarkRecipe = useCallback(async () => {
     if (!recipe) return;
@@ -296,17 +315,29 @@ function App() {
     }
 
     try {
-    const recipeToBookmark = {
-      ...recipe,
+      const recipeToBookmark = {
+        ...recipe,
         imageUrl: image
       };
       
-      await addToBookmarks(recipeToBookmark);
+      const bookmarkId = await addToBookmarks(recipeToBookmark);
+      
+      // If this recipe has a rating, save it to Firestore now that it's bookmarked
+      if (recipeRatings[recipe.name]) {
+        // Wait a moment for the bookmark to be fully created
+        setTimeout(async () => {
+          try {
+            await rateBookmark(bookmarkId, recipeRatings[recipe.name]);
+          } catch (error) {
+            console.error('Failed to save rating for bookmarked recipe:', error);
+          }
+        }, 1000);
+      }
     } catch (error) {
       console.error('Failed to bookmark recipe:', error);
       alert('Failed to bookmark recipe. Please try again.');
     }
-  }, [recipe, image, currentUser, addToBookmarks]);
+  }, [recipe, image, currentUser, addToBookmarks, recipeRatings, rateBookmark]);
 
   const isRecipeBookmarked = useCallback(() => {
     if (!recipe || !currentUser) return false;
@@ -331,7 +362,14 @@ function App() {
     setViewingRecipe(bookmarkedRecipe);
     setImage(bookmarkedRecipe.imageUrl); // Set the original image
     setCurrentPage('recipe-view');
-  }, []);
+    
+    // Ensure the rating from Firestore is in local state for immediate UI updates
+    if (bookmarkedRecipe.rating && !recipeRatings[bookmarkedRecipe.id]) {
+      const updatedRatings = { ...recipeRatings, [bookmarkedRecipe.id]: bookmarkedRecipe.rating };
+      setRecipeRatings(updatedRatings);
+      localStorage.setItem('recipeRatings', JSON.stringify(updatedRatings));
+    }
+  }, [recipeRatings]);
 
   const handleBackToBookmarks = useCallback(() => {
     setViewingRecipe(null);
@@ -345,12 +383,23 @@ function App() {
       setRecipeRatings(newRatings);
       localStorage.setItem('recipeRatings', JSON.stringify(newRatings));
       
-      // Save to Firestore if user is logged in and this is a bookmarked recipe
+      // Update viewingRecipe if we're currently viewing this recipe
+      if (viewingRecipe && viewingRecipe.id === recipeId) {
+        setViewingRecipe(prev => ({ ...prev, rating }));
+      }
+      
+      // Save to Firestore if user is logged in
       if (currentUser) {
         // Find the bookmark for this recipe
         const bookmark = bookmarks.find(b => b.id === recipeId);
+        
         if (bookmark) {
+          // This is a bookmarked recipe - save to Firestore
           await rateBookmark(recipeId, rating);
+        } else {
+          // This might be a recipe that's not yet bookmarked, but we still want to save the rating
+          // The rating will be saved when the recipe gets bookmarked
+          console.log('Rating saved locally for non-bookmarked recipe. Will be saved to Firestore when bookmarked.');
         }
       }
     } catch (error) {
@@ -361,7 +410,7 @@ function App() {
       setRecipeRatings(revertedRatings);
       localStorage.setItem('recipeRatings', JSON.stringify(revertedRatings));
     }
-  }, [recipeRatings, currentUser, bookmarks, rateBookmark]);
+  }, [recipeRatings, currentUser, bookmarks, rateBookmark, viewingRecipe]);
 
   const handleCookingTimeChange = useCallback((e) => {
     const value = e.target.value;
@@ -733,9 +782,6 @@ function App() {
                             🗑️ Remove
                           </button>
                         </div>
-                        <p className="bookmark-date">
-                          Bookmarked on {new Date(bookmarkedRecipe.bookmarkedAt).toLocaleDateString()}
-                        </p>
                       </div>
                     </div>
                   ))}
