@@ -1,7 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { useBookmarks } from './hooks/useBookmarks';
+import Auth from './components/Auth';
+import UserProfile from './components/UserProfile';
 import './App.css';
 
 function App() {
+  // eslint-disable-next-line no-unused-vars
+  const { currentUser, logout } = useAuth();
+  // eslint-disable-next-line no-unused-vars
+  const { bookmarks, addToBookmarks, removeFromBookmarks, toggleBookmark, rateBookmark, getCount } = useBookmarks();
   const [image, setImage] = useState(null);
   const [recipe, setRecipe] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -11,10 +19,64 @@ function App() {
   const [cuisineKeywords, setCuisineKeywords] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
-  const [bookmarkedRecipes, setBookmarkedRecipes] = useState([]);
   const [currentPage, setCurrentPage] = useState('home');
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [recipeRatings, setRecipeRatings] = useState({});
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(() => {
+    // Check if user has seen welcome screen before
+    return !localStorage.getItem('hasSeenWelcomeScreen');
+  });
+  const [isGuest, setIsGuest] = useState(false);
+
+  // Handle welcome screen actions
+  const handleSignIn = () => {
+    setShowWelcomeScreen(false);
+    localStorage.setItem('hasSeenWelcomeScreen', 'true');
+    setCurrentPage('auth');
+  };
+
+  const handleContinueAsGuest = () => {
+    setShowWelcomeScreen(false);
+    localStorage.setItem('hasSeenWelcomeScreen', 'true');
+    setIsGuest(true);
+    setCurrentPage('home');
+  };
+
+  // Logout functionality is now handled by Firebase auth state changes
+
+  // Handle authentication state changes
+  useEffect(() => {
+    if (currentUser) {
+      // User is authenticated
+      setShowWelcomeScreen(false);
+      setIsGuest(false);
+      localStorage.setItem('hasSeenWelcomeScreen', 'true');
+    } else {
+      // User is not authenticated - reset to guest mode
+      setIsGuest(false);
+      // Don't show welcome screen if user has seen it before
+      if (localStorage.getItem('hasSeenWelcomeScreen')) {
+        setShowWelcomeScreen(false);
+      }
+    }
+  }, [currentUser]);
+
+  // Reset app state when user logs out (currentUser becomes null)
+  useEffect(() => {
+    if (!currentUser && !isGuest) {
+      // User has logged out - reset app state
+      setImage(null);
+      setRecipe(null);
+      setIsEditingIngredients(false);
+      setNewIngredient('');
+      setCookingTime('');
+      setCuisineKeywords('');
+      setShowSuggestions(false);
+      setFilteredSuggestions([]);
+      setViewingRecipe(null);
+      setRecipeRatings({});
+    }
+  }, [currentUser, isGuest]);
 
   const handleImageUpload = useCallback((e) => {
     const file = e.target.files[0];
@@ -143,7 +205,7 @@ function App() {
       
       // Herbs & Spices
       'basil': '🌿', 'parsley': '🌿', 'cilantro': '🌿', 'oregano': '🌿', 'thyme': '🌿', 'rosemary': '🌿',
-      'mint': '🌿', 'sage': '🌿', 'ginger': '🫚', 'cinnamon': '🫚', 'pepper': '🫚', 'salt': '🧂',
+      'mint': '🌿', 'sage': '🌿', 'ginger': '🫚', 'cinnamon': '🫚', 'salt': '🧂',
       'sugar': '🍯', 'honey': '🍯', 'vanilla': '🍯',
       
       // Nuts & Seeds
@@ -198,6 +260,7 @@ function App() {
     } else {
       setShowSuggestions(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSuggestionClick = useCallback((suggestion) => {
@@ -216,72 +279,57 @@ function App() {
     setTimeout(() => setShowSuggestions(false), 200);
   }, []);
 
-  // Load bookmarked recipes and ratings from localStorage on component mount
+  // Load recipe ratings from localStorage on component mount
   useEffect(() => {
-    const saved = localStorage.getItem('bookmarkedRecipes');
-    if (saved) {
-      setBookmarkedRecipes(JSON.parse(saved));
-    }
-    
     const savedRatings = localStorage.getItem('recipeRatings');
     if (savedRatings) {
       setRecipeRatings(JSON.parse(savedRatings));
     }
   }, []);
 
-  const handleBookmarkRecipe = useCallback(() => {
+  const handleBookmarkRecipe = useCallback(async () => {
     if (!recipe) return;
     
+    if (!currentUser) {
+      alert('Please sign in to bookmark recipes');
+      return;
+    }
+
+    try {
     const recipeToBookmark = {
       ...recipe,
-      id: Date.now().toString(),
-      bookmarkedAt: new Date().toISOString(),
-      image: image // Include the original image
-    };
-    
-    const updatedBookmarks = [...bookmarkedRecipes, recipeToBookmark];
-    setBookmarkedRecipes(updatedBookmarks);
-    
-    try {
-      localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
+        imageUrl: image
+      };
+      
+      await addToBookmarks(recipeToBookmark);
     } catch (error) {
-      console.error('Failed to save bookmark:', error);
-      // If localStorage is full, try to clear old bookmarks
-      if (error.name === 'QuotaExceededError') {
-        const reducedBookmarks = updatedBookmarks.slice(-3); // Keep only last 3 to save space
-        setBookmarkedRecipes(reducedBookmarks);
-        try {
-          localStorage.setItem('bookmarkedRecipes', JSON.stringify(reducedBookmarks));
-        } catch (retryError) {
-          console.error('Still unable to save bookmarks:', retryError);
-          // If still failing, save without images
-          const bookmarksWithoutImages = reducedBookmarks.map(bookmark => ({
-            ...bookmark,
-            image: null
-          }));
-          localStorage.setItem('bookmarkedRecipes', JSON.stringify(bookmarksWithoutImages));
-        }
-      }
+      console.error('Failed to bookmark recipe:', error);
+      alert('Failed to bookmark recipe. Please try again.');
     }
-  }, [recipe, bookmarkedRecipes, image]);
+  }, [recipe, image, currentUser, addToBookmarks]);
 
   const isRecipeBookmarked = useCallback(() => {
-    if (!recipe) return false;
-    return bookmarkedRecipes.some(bookmarked => 
-      bookmarked.name === recipe.name && 
+    if (!recipe || !currentUser) return false;
+    return bookmarks.some(bookmarked => 
+      bookmarked.title === recipe.name && 
       bookmarked.ingredients.length === recipe.ingredients.length
     );
-  }, [recipe, bookmarkedRecipes]);
+  }, [recipe, bookmarks, currentUser]);
 
-  const handleRemoveBookmark = useCallback((recipeId) => {
-    const updatedBookmarks = bookmarkedRecipes.filter(bookmark => bookmark.id !== recipeId);
-    setBookmarkedRecipes(updatedBookmarks);
-    localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
-  }, [bookmarkedRecipes]);
+  const handleRemoveBookmark = useCallback(async (bookmarkId) => {
+    if (!currentUser) return;
+    
+    try {
+      await removeFromBookmarks(bookmarkId);
+    } catch (error) {
+      console.error('Failed to remove bookmark:', error);
+      alert('Failed to remove bookmark. Please try again.');
+    }
+  }, [currentUser, removeFromBookmarks]);
 
   const handleViewRecipe = useCallback((bookmarkedRecipe) => {
     setViewingRecipe(bookmarkedRecipe);
-    setImage(bookmarkedRecipe.image); // Set the original image
+    setImage(bookmarkedRecipe.imageUrl); // Set the original image
     setCurrentPage('recipe-view');
   }, []);
 
@@ -290,11 +338,30 @@ function App() {
     setCurrentPage('bookmarks');
   }, []);
 
-  const handleRatingChange = useCallback((recipeId, rating) => {
-    const newRatings = { ...recipeRatings, [recipeId]: rating };
-    setRecipeRatings(newRatings);
-    localStorage.setItem('recipeRatings', JSON.stringify(newRatings));
-  }, [recipeRatings]);
+  const handleRatingChange = useCallback(async (recipeId, rating) => {
+    try {
+      // Update local state immediately for responsive UI
+      const newRatings = { ...recipeRatings, [recipeId]: rating };
+      setRecipeRatings(newRatings);
+      localStorage.setItem('recipeRatings', JSON.stringify(newRatings));
+      
+      // Save to Firestore if user is logged in and this is a bookmarked recipe
+      if (currentUser) {
+        // Find the bookmark for this recipe
+        const bookmark = bookmarks.find(b => b.id === recipeId);
+        if (bookmark) {
+          await rateBookmark(recipeId, rating);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving rating:', error);
+      // Revert local state on error
+      const revertedRatings = { ...recipeRatings };
+      delete revertedRatings[recipeId];
+      setRecipeRatings(revertedRatings);
+      localStorage.setItem('recipeRatings', JSON.stringify(revertedRatings));
+    }
+  }, [recipeRatings, currentUser, bookmarks, rateBookmark]);
 
   const handleCookingTimeChange = useCallback((e) => {
     const value = e.target.value;
@@ -327,7 +394,7 @@ function App() {
         <div className="header-content">
           <div className="header-title">
         <h1>Cooked</h1>
-        <p>AI-Powered Recipe Generator</p>
+        <p>AI-Powered Recipe Generator {isGuest && <span className="guest-indicator">(Guest Mode)</span>}</p>
           </div>
           <div className="header-actions">
             {currentPage !== 'home' && (
@@ -351,14 +418,87 @@ function App() {
               }}
               title="View bookmarked recipes"
             >
-              🔖 Bookmarks ({bookmarkedRecipes.length})
+              🔖 Bookmarks ({getCount()})
             </button>
+            {currentUser ? (
+              <button
+                className={`profile-nav-btn ${currentPage === 'profile' ? 'active' : ''}`}
+                onClick={() => setCurrentPage(currentPage === 'profile' ? 'home' : 'profile')}
+                title="View profile and sign out"
+              >
+                👤 {currentUser.displayName || 'Profile'}
+              </button>
+            ) : isGuest ? (
+              <button
+                className="login-nav-btn"
+                onClick={() => setCurrentPage('auth')}
+                title="Sign in to save recipes"
+              >
+                🔐 Sign In
+              </button>
+            ) : (
+              <button
+                className="login-nav-btn"
+                onClick={() => setCurrentPage('auth')}
+                title="Sign in"
+              >
+                🔐 Sign In
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="main-content">
-        {currentPage === 'home' && (
+        {showWelcomeScreen && !currentUser && (
+          <section className="welcome-screen">
+            <div className="welcome-content">
+              <div className="welcome-header">
+                <h1>🍳 Welcome to Cooked!</h1>
+                <p>Your AI-powered recipe generator</p>
+              </div>
+              
+              <div className="welcome-features">
+                <div className="feature">
+                  <span className="feature-icon">📸</span>
+                  <h3>Photo Recognition</h3>
+                  <p>Upload a photo of your ingredients and get instant recipe suggestions</p>
+                </div>
+                <div className="feature">
+                  <span className="feature-icon">🤖</span>
+                  <h3>AI-Powered</h3>
+                  <p>Advanced AI analyzes your ingredients and creates personalized recipes</p>
+                </div>
+                <div className="feature">
+                  <span className="feature-icon">💾</span>
+                  <h3>Save & Organize</h3>
+                  <p>Bookmark your favorite recipes and access them anytime</p>
+                </div>
+              </div>
+
+              <div className="welcome-actions">
+                <button 
+                  className="welcome-signin-btn"
+                  onClick={handleSignIn}
+                >
+                  🔐 Sign In / Sign Up
+                </button>
+                <button 
+                  className="welcome-guest-btn"
+                  onClick={handleContinueAsGuest}
+                >
+                  👤 Continue as Guest
+                </button>
+              </div>
+
+              <div className="welcome-note">
+                <p>💡 <strong>Tip:</strong> Sign in to save your favorite recipes and access them across devices!</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {currentPage === 'home' && !showWelcomeScreen && (
         <section className="upload-section">
           <div className="upload-area" onClick={() => document.getElementById('image-upload').click()}>
             {image ? (
@@ -546,7 +686,7 @@ function App() {
         {currentPage === 'bookmarks' && (
           <section className="bookmarks-section">
             <h2>Your Bookmarked Recipes</h2>
-            {bookmarkedRecipes.length === 0 ? (
+            {bookmarks.length === 0 ? (
               <div className="no-bookmarks">
                 <p>No bookmarked recipes yet. Generate and bookmark some recipes to see them here!</p>
                 <button 
@@ -559,19 +699,19 @@ function App() {
             ) : (
               <>
                 <div className="bookmarks-grid">
-                  {bookmarkedRecipes.map((bookmarkedRecipe) => (
+                  {bookmarks.map((bookmarkedRecipe) => (
                     <div key={bookmarkedRecipe.id} className="bookmark-card">
                       <div className="bookmark-content">
                         <div className="bookmark-header">
-                          <h3>{bookmarkedRecipe.name}</h3>
+                          <h3>{bookmarkedRecipe.title}</h3>
                           <span className="bookmark-icon">🔖</span>
                         </div>
                         <div className="bookmark-meta">
                           <span>⏱️ {bookmarkedRecipe.cookingTime}</span>
                           <span>⚡ {bookmarkedRecipe.difficulty}</span>
-                          {recipeRatings[bookmarkedRecipe.id] && (
+                          {(bookmarkedRecipe.rating || recipeRatings[bookmarkedRecipe.id]) && (
                             <span className="bookmark-rating">
-                              ⭐ {recipeRatings[bookmarkedRecipe.id]}/5
+                              ⭐ {bookmarkedRecipe.rating || recipeRatings[bookmarkedRecipe.id]}/5
                             </span>
                           )}
                         </div>
@@ -663,24 +803,39 @@ function App() {
             <div className="recipe-rating-section">
               <h3>Rate this Recipe</h3>
               <div className="star-rating">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    className={`star ${star <= (recipeRatings[viewingRecipe.id] || 0) ? 'filled' : ''}`}
-                    onClick={() => handleRatingChange(viewingRecipe.id, star)}
-                    title={`Rate ${star} star${star > 1 ? 's' : ''}`}
-                  >
-                    ⭐
-                  </button>
-                ))}
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const currentRating = viewingRecipe.rating || recipeRatings[viewingRecipe.id] || 0;
+                  return (
+                    <button
+                      key={star}
+                      className={`star ${star <= currentRating ? 'filled' : ''}`}
+                      onClick={() => handleRatingChange(viewingRecipe.id, star)}
+                      title={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                    >
+                      ⭐
+                    </button>
+                  );
+                })}
               </div>
               <p className="rating-text">
-                {recipeRatings[viewingRecipe.id] 
-                  ? `You rated this recipe ${recipeRatings[viewingRecipe.id]} star${recipeRatings[viewingRecipe.id] > 1 ? 's' : ''}`
+                {(viewingRecipe.rating || recipeRatings[viewingRecipe.id]) 
+                  ? `You rated this recipe ${viewingRecipe.rating || recipeRatings[viewingRecipe.id]} star${(viewingRecipe.rating || recipeRatings[viewingRecipe.id]) > 1 ? 's' : ''}`
                   : 'Click a star to rate this recipe'
                 }
               </p>
             </div>
+          </section>
+        )}
+
+        {currentPage === 'auth' && (
+          <section className="auth-section">
+            <Auth onAuthSuccess={() => setCurrentPage('home')} />
+          </section>
+        )}
+
+        {currentPage === 'profile' && currentUser && (
+          <section className="profile-section">
+            <UserProfile />
           </section>
         )}
       </main>
