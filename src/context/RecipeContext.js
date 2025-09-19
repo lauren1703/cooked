@@ -418,12 +418,14 @@ export const RecipeProvider = ({ children }) => {
     setViewingRecipe(bookmarkedRecipe);
     setImage(bookmarkedRecipe.image); // Set the original image
     setCurrentStep(STEPS.RECIPE_VIEW);
-  }, [STEPS]);
+    // STEPS is a constant and doesn't need to be in the dependency array
+  }, []);
 
   const handleBackToBookmarks = useCallback(() => {
     setViewingRecipe(null);
     setCurrentStep(STEPS.BOOKMARKS);
-  }, [STEPS]);
+    // STEPS is a constant and doesn't need to be in the dependency array
+  }, []);
 
   const handleRatingChange = useCallback((recipeId, rating) => {
     const newRatings = { ...recipeRatings, [recipeId]: rating };

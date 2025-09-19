@@ -30,7 +30,7 @@ export const getIngredientEmoji = (ingredient) => {
     
     // Herbs & Spices
     'basil': '🌿', 'parsley': '🌿', 'cilantro': '🌿', 'oregano': '🌿', 'thyme': '🌿', 'rosemary': '🌿',
-    'mint': '🌿', 'sage': '🌿', 'ginger': '🫚', 'cinnamon': '🫚', 'pepper': '🫚', 'salt': '🧂',
+    'mint': '🌿', 'sage': '🌿', 'ginger': '🫚', 'cinnamon': '🫚', 'black pepper': '🫚', 'salt': '🧂',
     'sugar': '🍯', 'honey': '🍯', 'vanilla': '🍯',
     
     // Nuts & Seeds
