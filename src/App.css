@@ -187,6 +187,17 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: 400;
   max-width: 500px;
+}
+
+.guest-indicator {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  margin-left: 0.5rem;
   line-height: 1.6;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
@@ -233,7 +244,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .cook-more-nav-btn,
-.bookmarks-nav-btn {
+.bookmarks-nav-btn,
+.profile-nav-btn,
+.login-nav-btn {
   position: relative;
   background: rgba(255, 255, 255, 0.9);
   color: var(--primary-color);
@@ -254,7 +267,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .cook-more-nav-btn::before,
-.bookmarks-nav-btn::before {
+.bookmarks-nav-btn::before,
+.profile-nav-btn::before,
+.login-nav-btn::before {
   content: '';
   position: absolute;
   top: 0;
@@ -268,14 +283,18 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .cook-more-nav-btn:hover,
-.bookmarks-nav-btn:hover {
+.bookmarks-nav-btn:hover,
+.profile-nav-btn:hover,
+.login-nav-btn:hover {
   transform: translateY(-2px) scale(1.02);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
   color: var(--primary-dark);
 }
 
 .cook-more-nav-btn:active,
-.bookmarks-nav-btn:active {
+.bookmarks-nav-btn:active,
+.profile-nav-btn:active,
+.login-nav-btn:active {
   transform: translateY(0) scale(0.98);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -292,22 +311,172 @@ h1, h2, h3, h4, h5, h6 {
   overflow: visible;
 }
 
-.bookmarks-nav-btn::after {
-  content: attr(data-count);
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: var(--error-color);
+/* Removed the red dot indicator since we show count in button text */
+
+.profile-nav-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+}
+
+.profile-nav-btn.active {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: scale(1.05);
+}
+
+.login-nav-btn {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffc107;
+}
+
+.login-nav-btn:hover {
+  background-color: #ffeaa7;
+  border-color: #fdcb6e;
+}
+
+/* Removed logout button styles since logout is now handled in profile page */
+
+/* Welcome Screen */
+.welcome-screen {
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  align-items: center;
+  min-height: 80vh;
+  padding: 2rem;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+
+.welcome-content {
+  background: white;
+  border-radius: 20px;
+  padding: 3rem;
+  max-width: 800px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  animation: slideUp 0.6s ease-out;
+}
+
+.welcome-header h1 {
+  font-size: 3rem;
+  color: #333;
+  margin: 0 0 1rem 0;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.welcome-header p {
+  font-size: 1.2rem;
+  color: #666;
+  margin: 0 0 3rem 0;
+}
+
+.welcome-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.feature {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: #f8f9fa;
+  transition: transform 0.3s ease;
+}
+
+.feature:hover {
+  transform: translateY(-5px);
+}
+
+.feature-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.feature h3 {
+  font-size: 1.2rem;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+}
+
+.feature p {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.welcome-signin-btn,
+.welcome-guest-btn {
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.welcome-signin-btn {
+  background: linear-gradient(135deg, #E67E22 0%, #D35400 100%);
+  color: white;
+}
+
+.welcome-signin-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(230, 126, 34, 0.3);
+}
+
+.welcome-guest-btn {
+  background: white;
+  color: #E67E22;
+  border: 2px solid #E67E22;
+}
+
+.welcome-guest-btn:hover {
+  background: #E67E22;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(230, 126, 34, 0.2);
+}
+
+.welcome-note {
+  background: #e3f2fd;
+  border-radius: 12px;
+  padding: 1rem;
+  border-left: 4px solid #2196f3;
+}
+
+.welcome-note p {
+  margin: 0;
+  color: #1976d2;
+  font-size: 0.9rem;
+}
+
+/* Auth and Profile Sections */
+.auth-section,
+.profile-section {
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
 }
 
 /* Main Content Area */
@@ -572,11 +741,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .preview-image {
-  width: 100%;
+  max-width: 100%;
+  max-height: 300px;
+  width: auto;
   height: auto;
   display: block;
+  margin: 0 auto;
   border-radius: var(--border-radius);
   transition: all 0.3s ease;
+  object-fit: contain;
 }
 
 .preview-overlay {
@@ -1585,9 +1758,34 @@ h1, h2, h3, h4, h5, h6 {
   }
   
   .cook-more-nav-btn,
-  .bookmarks-nav-btn {
+  .bookmarks-nav-btn,
+  .profile-nav-btn,
+  .login-nav-btn {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
+  }
+  
+  .welcome-content {
+    padding: 2rem 1.5rem;
+  }
+  
+  .welcome-header h1 {
+    font-size: 2.5rem;
+  }
+  
+  .welcome-features {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .welcome-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .welcome-signin-btn,
+  .welcome-guest-btn {
+    min-width: 250px;
   }
   
   .bookmarks-grid {
