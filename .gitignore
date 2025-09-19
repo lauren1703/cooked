@@ -24,3 +24,20 @@ yarn-error.log*
 
 # Ignore server secrets
 server/.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dylib
+.env
+.env.*
+.DS_Store
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+data/
+
+.venv/
