@@ -35,8 +35,10 @@ const EditIngredientsScreen = () => {
   return (
     <section className="edit-ingredients-screen">
       <div className="ingredients-container">
-        <h2 className="ingredients-title">We Found These Ingredients</h2>
-        <p className="ingredients-subtitle">Add or remove ingredients to customize your recipe</p>
+        <h2 className="ingredients-title">{editedIngredients.length > 0 ? 'We Found These Ingredients' : 'No Ingredients Detected'}</h2>
+        <p className="ingredients-subtitle">{editedIngredients.length > 0 
+          ? 'Add or remove ingredients to customize your recipe' 
+          : 'Please add ingredients manually to continue'}</p>
         
         {processingStatus.inProgress && (
           <div className="processing-status">
@@ -48,7 +50,9 @@ const EditIngredientsScreen = () => {
         <div className="ingredients-list">
           {editedIngredients.length === 0 ? (
             <div className="no-ingredients">
-              <p>No ingredients detected. Add some ingredients to continue.</p>
+              <div className="no-ingredients-icon">🔍</div>
+              <p>We couldn't detect any ingredients in your image.</p>
+              <p>Please add ingredients manually using the field below.</p>
             </div>
           ) : (
             editedIngredients.map((ingredient, index) => (

@@ -41,6 +41,10 @@ const WebcamCapture = ({ onCapture, onClose }) => {
     onClose();
   };
 
+  const handleDeleteImage = (indexToDelete) => {
+    setCapturedImages(prev => prev.filter((_, index) => index !== indexToDelete));
+  };
+
   return (
     <div className="webcam-container">
       <div className="webcam-header">
@@ -49,8 +53,42 @@ const WebcamCapture = ({ onCapture, onClose }) => {
       </div>
 
       <div className="webcam-content">
-        {capturedImages.length > 0 ? (
+        {/* Always show the webcam */}
+        <div className="webcam-view">
+          <Webcam
+            audio={false}
+            ref={webcamRef}
+            screenshotFormat="image/jpeg"
+            videoConstraints={videoConstraints}
+            onUserMedia={handleUserMedia}
+            className="webcam-video"
+          />
+          {!isCameraReady && (
+            <div className="camera-loading">
+              <div className="spinner"></div>
+              <p>Accessing camera...</p>
+            </div>
+          )}
+        </div>
+        
+        {/* Camera controls */}
+        <div className="webcam-controls">
+          <button 
+            className="capture-button" 
+            onClick={captureImage}
+            disabled={!isCameraReady}
+          >
+            📸 Capture Ingredient
+          </button>
+          <p className="webcam-hint">
+            Take multiple photos to capture all your ingredients
+          </p>
+        </div>
+        
+        {/* Show captured images if any */}
+        {capturedImages.length > 0 && (
           <div className="captured-images">
+            <h4 className="captured-images-title">Captured Images ({capturedImages.length})</h4>
             <div className="image-grid">
               {capturedImages.map((imgSrc, index) => (
                 <div key={index} className="captured-image-container">
@@ -60,12 +98,19 @@ const WebcamCapture = ({ onCapture, onClose }) => {
                     className="captured-image" 
                   />
                   <span className="image-number">{index + 1}</span>
+                  <button 
+                    className="delete-image-button" 
+                    onClick={() => handleDeleteImage(index)}
+                    title="Delete this image"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
             <div className="capture-actions">
               <button className="webcam-button" onClick={handleRetake}>
-                Retake Photos
+                Clear All Photos
               </button>
               <button 
                 className="webcam-button primary" 
@@ -76,37 +121,6 @@ const WebcamCapture = ({ onCapture, onClose }) => {
               </button>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="webcam-view">
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                videoConstraints={videoConstraints}
-                onUserMedia={handleUserMedia}
-                className="webcam-video"
-              />
-              {!isCameraReady && (
-                <div className="camera-loading">
-                  <div className="spinner"></div>
-                  <p>Accessing camera...</p>
-                </div>
-              )}
-            </div>
-            <div className="webcam-controls">
-              <button 
-                className="capture-button" 
-                onClick={captureImage}
-                disabled={!isCameraReady}
-              >
-                📸 Capture Ingredient
-              </button>
-              <p className="webcam-hint">
-                Take multiple photos to capture all your ingredients
-              </p>
-            </div>
-          </>
         )}
       </div>
     </div>

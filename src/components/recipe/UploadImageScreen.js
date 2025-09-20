@@ -11,7 +11,13 @@ const UploadImageScreen = () => {
     setCurrentImageIndex, 
     isLoading, 
     handleImageUpload,
-    setImages
+    setImages,
+    setDetectedIngredients,
+    setEditedIngredients,
+    setIngredientSources,
+    setIsLoading,
+    setCurrentStep,
+    STEPS
   } = useRecipe();
   
   const [showWebcam, setShowWebcam] = useState(false);
@@ -22,34 +28,99 @@ const UploadImageScreen = () => {
     setImages(capturedImages);
     setCurrentImageIndex(0);
     setShowWebcam(false);
+    setIsLoading(true);
     
-    // Process the first image to detect ingredients
-    // This simulates the same flow as handleImageUpload
+    // Process all images to detect ingredients, similar to handleImageUpload in RecipeContext
     if (capturedImages.length > 0) {
-      const firstImage = capturedImages[0];
+      // Arrays to collect ingredients from all images
+      const allIngredients = [];
+      const sourceMap = {};
+      let processedCount = 0;
       
-      // Call the API to identify ingredients from the first image
-      fetch('http://localhost:5000/api/identify-ingredients', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          image: firstImage
+      // Process each image
+      capturedImages.forEach((imageData, fileIndex) => {
+        console.log(`Processing webcam image ${fileIndex + 1} of ${capturedImages.length}...`);
+        
+        // Call the API to identify ingredients from each image
+        fetch('http://localhost:5000/api/identify-ingredients', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            image: imageData
+          })
         })
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        // The rest of the processing will be handled by the RecipeContext
-        console.log('Webcam image processed:', data);
-      })
-      .catch(error => {
-        console.error('Error processing webcam image:', error);
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log(`Webcam image ${fileIndex + 1} processed:`, data);
+          
+          // Get the identified ingredients from the API response
+          const identifiedIngredients = data.ingredients || [];
+          
+          // Add these ingredients to our collection and track their source
+          identifiedIngredients.forEach(ingredient => {
+            if (!allIngredients.includes(ingredient)) {
+              allIngredients.push(ingredient);
+              sourceMap[ingredient] = fileIndex;
+            }
+          });
+          
+          // Update processed count
+          processedCount++;
+          
+          // When all images are processed
+          if (processedCount === capturedImages.length) {
+            // Update ingredients with all detected ingredients
+            if (allIngredients.length > 0) {
+              // Use whatever ingredients we did manage to detect
+              setDetectedIngredients(allIngredients);
+              setEditedIngredients(allIngredients);
+              setIngredientSources(sourceMap);
+            } else {
+              // If no ingredients were detected, set empty arrays
+              setDetectedIngredients([]);
+              setEditedIngredients([]);
+              setIngredientSources({});
+            }
+            
+            // Complete processing
+            setIsLoading(false);
+            
+            // Move to the next step
+            setCurrentStep(STEPS.EDIT_INGREDIENTS);
+          }
+        })
+        .catch(error => {
+          console.error(`Error processing webcam image ${fileIndex + 1}:`, error);
+          
+          // Still count this as processed even if it failed
+          processedCount++;
+          
+          // When all images are processed (even with some failures)
+          if (processedCount === capturedImages.length) {
+            // If we have ingredients from other images, use those
+            if (allIngredients.length > 0) {
+              setDetectedIngredients(allIngredients);
+              setEditedIngredients(allIngredients);
+              setIngredientSources(sourceMap);
+            } else {
+              // If no ingredients at all, set empty arrays
+              setDetectedIngredients([]);
+              setEditedIngredients([]);
+              setIngredientSources({});
+            }
+            
+            // Complete processing
+            setIsLoading(false);
+            setCurrentStep(STEPS.EDIT_INGREDIENTS);
+          }
+        });
       });
     }
   };

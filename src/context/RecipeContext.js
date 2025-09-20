@@ -186,18 +186,11 @@ export const RecipeProvider = ({ children }) => {
             
             // When all images are processed (even with some failures)
             if (processedCount === files.length) {
-              // If we have no ingredients at all, use defaults
+              // If we have no ingredients at all, just set empty arrays
               if (allIngredients.length === 0) {
-                const defaultIngredients = ['tomato', 'onion', 'garlic', 'bell pepper', 'olive oil', 'pasta'];
-                setDetectedIngredients(defaultIngredients);
-                setEditedIngredients(defaultIngredients);
-                
-                // Create default source map
-                const defaultSourceMap = {};
-                defaultIngredients.forEach(ingredient => {
-                  defaultSourceMap[ingredient] = 0;
-                });
-                setIngredientSources(defaultSourceMap);
+                setDetectedIngredients([]);
+                setEditedIngredients([]);
+                setIngredientSources({});
               } else {
                 // Use whatever ingredients we did manage to detect
                 setDetectedIngredients(allIngredients);
@@ -243,16 +236,60 @@ export const RecipeProvider = ({ children }) => {
   }, []);
   
   // Move from preferences to recipe generation
-  const handlePreferencesComplete = useCallback(() => {
+  const handlePreferencesComplete = useCallback(async () => {
     setIsLoading(true);
     
-    // Generate three recipe options based on ingredients and preferences
-    setTimeout(() => {
+    try {
       const timeInput = cookingTime.trim() || '20';
       const cuisineInput = cuisineKeywords.trim() || 'Italian';
       
-      // Create three different recipe variations
-      const recipes = [
+      // Call the API to generate recipes
+      const response = await fetch('http://localhost:3001/api/generate-recipes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ingredients: editedIngredients,
+          cuisine: cuisineInput,
+          targetTime: parseInt(timeInput),
+          variations: 3 // Request 3 recipe variations
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Recipe generation failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.recipes || !Array.isArray(data.recipes) || data.recipes.length === 0) {
+        throw new Error('No recipes returned from API');
+      }
+      
+      // Transform API response to match our app's recipe format
+      const recipes = data.recipes.map((recipe, index) => ({
+        id: recipe.id || (index + 1).toString(),
+        name: recipe.name,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        cookingTime: `${recipe.cookingTimeMinutes} minutes`,
+        difficulty: recipe.difficulty,
+        cuisine: recipe.cuisine,
+        image: image // Add the image from our context
+      }));
+      
+      setGeneratedRecipes(recipes);
+      setCurrentStep(STEPS.VIEW_RECIPES);
+    } catch (error) {
+      console.error('Error generating recipes:', error);
+      
+      // Fallback to mock recipes if API call fails
+      const timeInput = cookingTime.trim() || '20';
+      const cuisineInput = cuisineKeywords.trim() || 'Italian';
+      
+      // Create three different recipe variations as fallback
+      const fallbackRecipes = [
         {
           id: '1',
           name: `${cuisineInput} Style ${editedIngredients[0]} Delight`,
@@ -319,10 +356,11 @@ export const RecipeProvider = ({ children }) => {
         }
       ];
       
-      setGeneratedRecipes(recipes);
-      setIsLoading(false);
+      setGeneratedRecipes(fallbackRecipes);
       setCurrentStep(STEPS.VIEW_RECIPES);
-    }, 2000);
+    } finally {
+      setIsLoading(false);
+    }
   }, [editedIngredients, cookingTime, cuisineKeywords, image]);
   
   // Select a recipe from the generated options
