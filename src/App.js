@@ -42,6 +42,9 @@ const AppContent = () => {
     // Image state
     image, setImage,
     
+    // Ingredients state
+    editedIngredients,
+    
     // Recipe state
     recipe, setRecipe,
     isLoading, setIsLoading,
@@ -276,6 +279,7 @@ const AppContent = () => {
             handleRatingChange={handleRatingChange}
             getIngredientEmoji={getIngredientEmoji}
             setCurrentPage={setCurrentPage}
+            userIngredients={editedIngredients}
           />
         )}
 

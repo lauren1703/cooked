@@ -1,6 +1,91 @@
 import React, { useState, useEffect } from 'react';
 import './RecipeFlow.css';
 
+// Enhanced utility function to check ingredient feasibility
+// Only counts ingredients that user explicitly inputted, not pantry staples
+const checkIngredientFeasibility = (recipeIngredients, userIngredients) => {
+  // Enhanced matching with fuzzy logic
+  const fuzzyMatch = (ingredient, userIngredient) => {
+    const ing = ingredient.toLowerCase().trim();
+    const user = userIngredient.toLowerCase().trim();
+    
+    // Exact match
+    if (ing === user) return true;
+    
+    // Contains match (user ingredient contains recipe ingredient)
+    if (ing.includes(user) || user.includes(ing)) return true;
+    
+    // Word boundary match (handles plurals, etc.)
+    const ingWords = ing.split(/\s+/);
+    const userWords = user.split(/\s+/);
+    
+    return ingWords.some(word => 
+      userWords.some(userWord => 
+        word.includes(userWord) || userWord.includes(word)
+      )
+    );
+  };
+  
+  const userIngredientsLower = userIngredients.map(ing => ing.toLowerCase().trim());
+  
+  let hasIngredients = 0;
+  let missingIngredients = [];
+  let matchedIngredients = [];
+  let pantryStaples = [];
+  
+  recipeIngredients.forEach(ingredient => {
+    const ingredientLower = ingredient.toLowerCase().trim();
+    
+    // Check if user has this ingredient (with fuzzy matching)
+    const userMatch = userIngredientsLower.find(user => 
+      fuzzyMatch(ingredientLower, user)
+    );
+    
+    if (userMatch) {
+      hasIngredients++;
+      matchedIngredients.push({
+        recipe: ingredient,
+        user: userIngredients.find(ui => 
+          fuzzyMatch(ingredientLower, ui.toLowerCase().trim())
+        )
+      });
+    } else {
+      // Check if it's a common pantry staple (for display purposes only)
+      const commonPantryStaples = [
+        'oil', 'salt', 'pepper', 'butter', 'water', 'garlic', 'onion', 
+        'herbs', 'oregano', 'basil', 'thyme', 'paprika', 'lemon', 'lime',
+        'flour', 'sugar', 'vinegar', 'soy sauce', 'olive oil', 'vegetable oil',
+        'eggs', 'milk', 'cheese', 'bread', 'rice', 'pasta', 'noodles',
+        'tomato', 'tomatoes', 'potato', 'potatoes', 'carrot', 'carrots',
+        'celery', 'bell pepper', 'peppers', 'mushroom', 'mushrooms'
+      ];
+      
+      const isPantryStaple = commonPantryStaples.some(basic => 
+        ingredientLower.includes(basic.toLowerCase()) || 
+        basic.toLowerCase().includes(ingredientLower)
+      );
+      
+      if (isPantryStaple) {
+        pantryStaples.push(ingredient);
+      } else {
+        missingIngredients.push(ingredient);
+      }
+    }
+  });
+  
+  // Calculate feasibility based ONLY on user's inputted ingredients
+  const feasibilityPercentage = Math.round((hasIngredients / recipeIngredients.length) * 100);
+  
+  return {
+    percentage: feasibilityPercentage,
+    hasCount: hasIngredients,
+    totalCount: recipeIngredients.length,
+    missing: missingIngredients,
+    matched: matchedIngredients,
+    pantryStaples: pantryStaples
+  };
+};
+
 const RecipeView = ({ 
   viewingRecipe, 
   image, 
@@ -8,7 +93,8 @@ const RecipeView = ({
   recipeRatings, 
   handleRatingChange,
   getIngredientEmoji,
-  setCurrentPage
+  setCurrentPage,
+  userIngredients = [] // Add user ingredients for feasibility check
 }) => {
   // State for multiple images
   const [images, setImages] = useState([]);
@@ -99,14 +185,67 @@ const RecipeView = ({
           <div className="recipe-details">
             <div className="ingredients">
               <h3>Ingredients</h3>
-              <ul>
-                {viewingRecipe.ingredients.map((ingredient, index) => (
-                  <li key={index}>
-                    <span className="ingredient-emoji">{getIngredientEmoji(ingredient)}</span>
-                    {ingredient}
-                  </li>
-                ))}
-              </ul>
+              {(() => {
+                const feasibility = checkIngredientFeasibility(viewingRecipe.ingredients, userIngredients);
+                return (
+                  <>
+                    <div className="ingredient-feasibility-summary">
+                      <div className="feasibility-header">
+                        <span className="feasibility-icon">
+                          {feasibility.percentage >= 80 ? '✅' : feasibility.percentage >= 60 ? '⚠️' : '❌'}
+                        </span>
+                        <span className="feasibility-text">
+                          {feasibility.percentage >= 80 ? 'Easy to make!' : 
+                           feasibility.percentage >= 60 ? 'Need a few items' : 'Need many items'}
+                        </span>
+                        <span className="feasibility-percentage">
+                          {feasibility.percentage}%
+                        </span>
+                      </div>
+                      <div className="feasibility-progress-bar">
+                        <div 
+                          className="feasibility-progress-fill" 
+                          style={{ 
+                            width: `${feasibility.percentage}%`,
+                            backgroundColor: feasibility.percentage >= 80 ? '#4CAF50' : 
+                                           feasibility.percentage >= 60 ? '#FF9800' : '#F44336'
+                          }}
+                        ></div>
+                      </div>
+                      <div className="feasibility-details">
+                        <span className="ingredient-count">
+                          <strong>{feasibility.hasCount}</strong> of <strong>{feasibility.totalCount}</strong> ingredients you have
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <ul className="ingredients-list">
+                      {viewingRecipe.ingredients.map((ingredient, index) => {
+                        const ingredientLower = ingredient.toLowerCase().trim();
+                        const isMatched = feasibility.matched.some(match => 
+                          match.recipe.toLowerCase().trim() === ingredientLower
+                        );
+                        const isPantryStaple = feasibility.pantryStaples.some(pantry => 
+                          pantry.toLowerCase().trim() === ingredientLower
+                        );
+                        
+                        return (
+                          <li 
+                            key={index} 
+                            className={`ingredient-item ${isMatched ? 'has-ingredient' : isPantryStaple ? 'pantry-staple' : 'missing-ingredient'}`}
+                          >
+                            <span className="ingredient-emoji">{getIngredientEmoji(ingredient)}</span>
+                            <span className="ingredient-text">{ingredient}</span>
+                            <span className="ingredient-status">
+                              {isMatched ? '✅' : isPantryStaple ? '🏠' : '❌'}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                );
+              })()}
             </div>
             
             <div className="instructions">
