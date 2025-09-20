@@ -2,7 +2,7 @@ import React from 'react';
 import { useRecipe } from '../../context/RecipeContext';
 import './RecipeFlow.css';
 
-const DoneScreen = () => {
+const DoneScreen = ({ setCurrentPage }) => {
   const { 
     selectedRecipe, 
     handleGoToBookmarks,
@@ -40,7 +40,7 @@ const DoneScreen = () => {
         <div className="action-buttons">
           <button 
             className="view-bookmarks-button"
-            onClick={handleGoToBookmarks}
+            onClick={() => handleGoToBookmarks(setCurrentPage)}
           >
             🔖 View All Bookmarks
           </button>

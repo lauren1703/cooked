@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRecipe } from '../../context/RecipeContext';
 import './RecipeFlow.css';
 
@@ -10,8 +10,14 @@ const RecipeOptionsScreen = () => {
     handleSelectRecipe,
     handleBookmarkSelectedRecipe,
     setCurrentStep,
-    STEPS
+    STEPS,
+    images,
+    currentImageIndex,
+    setCurrentImageIndex
   } = useRecipe();
+  
+  // State to track if the recipe has been bookmarked
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   const renderDifficultyBadge = (difficulty) => {
     const colors = {
@@ -103,6 +109,48 @@ const RecipeOptionsScreen = () => {
                     <span>⚡ {selectedRecipe.difficulty}</span>
                   </div>
                   
+                  {images.length > 0 && (
+                    <div className="recipe-images">
+                      <div className="recipe-image-container">
+                        <img 
+                          src={images[currentImageIndex]} 
+                          alt={`Ingredient ${currentImageIndex + 1}`} 
+                          className="recipe-image"
+                        />
+                      </div>
+                      
+                      {images.length > 1 && (
+                        <div className="image-navigation">
+                          <button 
+                            className="nav-button prev"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentImageIndex(prev => (prev > 0 ? prev - 1 : images.length - 1));
+                            }}
+                            title="Previous image"
+                          >
+                            ◀
+                          </button>
+                          
+                          <span className="image-counter">
+                            {currentImageIndex + 1} / {images.length}
+                          </span>
+                          
+                          <button 
+                            className="nav-button next"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentImageIndex(prev => (prev < images.length - 1 ? prev + 1 : 0));
+                            }}
+                            title="Next image"
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   <div className="recipe-sections">
                     <div className="ingredients-section">
                       <h4>Ingredients</h4>
@@ -124,10 +172,14 @@ const RecipeOptionsScreen = () => {
                   </div>
                   
                   <button 
-                    className="bookmark-button"
-                    onClick={handleBookmarkSelectedRecipe}
+                    className={`bookmark-button ${isBookmarked ? 'bookmarked' : ''}`}
+                    onClick={() => {
+                      handleBookmarkSelectedRecipe();
+                      setIsBookmarked(true);
+                    }}
+                    disabled={isBookmarked}
                   >
-                    🔖 Bookmark This Recipe
+                    {isBookmarked ? '✓ Bookmarked!' : '🔖 Bookmark This Recipe'}
                   </button>
                 </>
               ) : (
@@ -145,11 +197,11 @@ const RecipeOptionsScreen = () => {
                 Back to Preferences
               </button>
               <button 
-                className="bookmark-button"
-                onClick={handleBookmarkSelectedRecipe}
+                className="finish-button"
+                onClick={() => setCurrentStep(STEPS.DONE)}
                 disabled={!selectedRecipe}
               >
-                Save & Continue
+                🎉 Finish
               </button>
             </div>
           </>

@@ -93,6 +93,45 @@
   background-color: #4CAF50;
 }
 
+/* Upload Screen */
+.upload-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 80px);
+}
+
+/* Input Method Selector */
+.input-method-selector {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.method-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.method-button:hover {
+  background-color: #e9ecef;
+}
+
+.method-button.active {
+  background-color: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
 /* Upload Image Screen */
 .upload-container {
   display: flex;
@@ -195,16 +234,63 @@
 
 .retry-button {
   padding: 0.75rem 1.5rem;
-  background-color: #f0f0f0;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 1rem;
   cursor: pointer;
+  font-size: 0.9rem;
+  color: #555;
   transition: all 0.2s ease;
 }
 
 .retry-button:hover {
-  background-color: #e0e0e0;
+  background-color: #e9ecef;
+  color: #333;
+}
+
+/* Image controls and navigation */
+.image-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+
+.image-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.nav-button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.nav-button:hover {
+  background-color: #3e8e41;
+  transform: scale(1.1);
+}
+
+.image-counter {
+  font-size: 0.9rem;
+  color: #555;
+  min-width: 60px;
+  text-align: center;
 }
 
 /* Edit Ingredients Screen */
@@ -213,6 +299,84 @@
   flex-direction: column;
   max-width: 800px;
   margin: 0 auto;
+}
+
+.processing-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.processing-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3498db;
+  border-radius: 50%;
+  margin-right: 10px;
+  animation: spin 1s linear infinite;
+}
+
+.ingredient-item-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.source-indicator {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  width: 20px;
+  height: 20px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  cursor: help;
+  z-index: 2;
+}
+
+.image-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 10px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  width: 200px;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.tooltip-image-container {
+  width: 100%;
+  height: 150px;
+  overflow: hidden;
+}
+
+.tooltip-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tooltip-text {
+  padding: 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #555;
+  background-color: #f8f9fa;
 }
 
 .ingredients-title {
@@ -516,6 +680,38 @@
 }
 
 /* Recipe Options Screen */
+.recipe-options-screen {
+  padding: 2rem;
+}
+
+.recipe-images {
+  margin: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recipe-image-container {
+  width: 100%;
+  max-width: 400px;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.recipe-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.recipe-image:hover {
+  transform: scale(1.05);
+}
+
 .recipe-options-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -723,8 +919,49 @@
 }
 
 .bookmark-button:disabled {
+  background-color: #45a049;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.bookmark-button:disabled:hover {
+  transform: none;
+}
+
+/* Special styling for bookmarked state */
+.bookmark-button.bookmarked {
+  background-color: #45a049;
+  position: relative;
+}
+
+/* Finish button styling */
+.finish-button {
+  padding: 0.75rem 2rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: block;
+  margin-left: auto;
+}
+
+.finish-button:hover {
+  background-color: #0b7dda;
+  transform: translateY(-2px);
+}
+
+.finish-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.finish-button:disabled:hover {
+  transform: none;
 }
 
 .no-selection {
@@ -733,6 +970,278 @@
   justify-content: center;
   height: 300px;
   color: #888;
+  font-style: italic;
+}
+
+/* Webcam Component */
+.webcam-container {
+  width: 100%;
+  max-width: 720px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.webcam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.webcam-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6c757d;
+}
+
+.close-button:hover {
+  color: #343a40;
+}
+
+.webcam-content {
+  padding: 1rem;
+}
+
+.webcam-view {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  background-color: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.webcam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+}
+
+.webcam-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.capture-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1rem;
+}
+
+.capture-button:hover {
+  background-color: #3e8e41;
+}
+
+.capture-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.webcam-hint {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.captured-images {
+  width: 100%;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.captured-image-container {
+  position: relative;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.captured-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-number {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.capture-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.webcam-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.webcam-button:hover {
+  background-color: #e9ecef;
+}
+
+.webcam-button.primary {
+  background-color: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.webcam-button.primary:hover {
+  background-color: #3e8e41;
+}
+
+.webcam-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Recipe View Section */
+.recipe-view-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.recipe-view-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.recipe-view-header .back-btn {
+  margin-right: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #f1f1f1;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.recipe-view-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.recipe-view-image {
+  flex: 1;
+  min-width: 300px;
+}
+
+.recipe-view-image .recipe-images {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recipe-view-image .recipe-image-container {
+  width: 100%;
+  max-width: 400px;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.recipe-view-image .recipe-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.recipe-view-image .recipe-image:hover {
+  transform: scale(1.05);
+}
+
+.recipe-view-details {
+  flex: 2;
+  min-width: 300px;
+}
+
+.no-image-placeholder-large {
+  width: 100%;
+  height: 300px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.placeholder-text {
+  color: #6c757d;
   font-style: italic;
 }
 

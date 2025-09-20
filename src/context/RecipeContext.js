@@ -1,5 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect, useContext } from 'react';
 import { getIngredientEmoji, commonIngredients } from '../utils/ingredientUtils';
+import { useBookmarks } from '../hooks/useBookmarks';
+import { useAuth } from '../contexts/AuthContext';
 
 // Create the context
 const RecipeContext = createContext();
@@ -17,18 +19,40 @@ export const STEPS = {
 
 // Create a provider component
 export const RecipeProvider = ({ children }) => {
+  // Get authentication and bookmarking hooks
+  const { currentUser } = useAuth();
+  const { addToBookmarks, removeFromBookmarks, checkIfBookmarked, bookmarks } = useBookmarks();
   // Main flow state
   const [currentStep, setCurrentStep] = useState(STEPS.UPLOAD_IMAGE);
   
   // Image upload state
-  const [image, setImage] = useState(null);
+  const [images, setImages] = useState([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // For backward compatibility
+  const image = images.length > 0 ? images[currentImageIndex] : null;
+  const setImage = (newImage) => {
+    if (newImage === null) {
+      setImages([]);
+      setCurrentImageIndex(0);
+    } else {
+      setImages([newImage]);
+      setCurrentImageIndex(0);
+    }
+  };
   
   // Ingredients state
   const [detectedIngredients, setDetectedIngredients] = useState([]);
+  const [ingredientSources, setIngredientSources] = useState({}); // Maps ingredients to their source image index
   const [editedIngredients, setEditedIngredients] = useState([]);
   const [newIngredient, setNewIngredient] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [processingStatus, setProcessingStatus] = useState({
+    total: 0,
+    processed: 0,
+    inProgress: false
+  });
   
   // Preferences state
   const [cookingTime, setCookingTime] = useState('');
@@ -62,73 +86,140 @@ export const RecipeProvider = ({ children }) => {
   }, []);
 
   const handleImageUpload = useCallback((e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageData = reader.result;
-        setImage(imageData);
-        
-        setIsLoading(true);
-        
-        console.log('Calling API to identify ingredients...');
-        fetch('http://localhost:5000/api/identify-ingredients', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            image: imageData // Send the base64 image data
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Process all selected files
+      const newImages = [];
+      let processedCount = 0;
+      
+      setIsLoading(true);
+      setProcessingStatus({
+        total: files.length,
+        processed: 0,
+        inProgress: true
+      });
+      
+      // Arrays to collect ingredients from all images
+      const allIngredients = [];
+      const sourceMap = {};
+      
+      // Process each file
+      Array.from(files).forEach((file, fileIndex) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const imageData = reader.result;
+          newImages.push(imageData);
+          
+          // Process ingredients for this image
+          console.log(`Calling API to identify ingredients for image ${fileIndex + 1}...`);
+          fetch('http://localhost:5000/api/identify-ingredients', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              image: imageData
+            })
           })
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log('API response:', data);
-          // Get the identified ingredients from the API response
-          const identifiedIngredients = data.ingredients || [];
-          
-          // If no ingredients were identified, use some default ingredients
-          const ingredients = identifiedIngredients.length > 0 
-            ? identifiedIngredients 
-            : ['tomato', 'onion', 'garlic', 'bell pepper', 'olive oil', 'pasta'];
-          
-          setDetectedIngredients(ingredients);
-          setEditedIngredients(ingredients);
-          setIsLoading(false);
-          
-          // Move to the next step
-          setCurrentStep(STEPS.EDIT_INGREDIENTS);
-        })
-        .catch(error => {
-          console.error('Error identifying ingredients:', error);
-          
-          // Fallback to default ingredients if the API call fails
-          const defaultIngredients = ['tomato', 'onion', 'garlic', 'bell pepper', 'olive oil', 'pasta'];
-          setDetectedIngredients(defaultIngredients);
-          setEditedIngredients(defaultIngredients);
-          setIsLoading(false);
-          setCurrentStep(STEPS.EDIT_INGREDIENTS);
-        });
-      };
-      reader.readAsDataURL(file);
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log(`API response for image ${fileIndex + 1}:`, data);
+            // Get the identified ingredients from the API response
+            const identifiedIngredients = data.ingredients || [];
+            
+            // If no ingredients were identified, use some defaults for this image
+            const ingredients = identifiedIngredients.length > 0 
+              ? identifiedIngredients 
+              : fileIndex === 0 ? ['tomato', 'onion', 'garlic'] : ['bell pepper', 'olive oil', 'pasta'];
+            
+            // Add these ingredients to our collection and track their source
+            ingredients.forEach(ingredient => {
+              if (!allIngredients.includes(ingredient)) {
+                allIngredients.push(ingredient);
+                sourceMap[ingredient] = fileIndex;
+              }
+            });
+            
+            // Update processing status
+            processedCount++;
+            setProcessingStatus(prev => ({
+              ...prev,
+              processed: processedCount
+            }));
+            
+            // When all images are processed
+            if (processedCount === files.length) {
+              // Update images state with all new images
+              setImages(newImages);
+              setCurrentImageIndex(0);
+              
+              // Update ingredients with all detected ingredients
+              setDetectedIngredients(allIngredients);
+              setEditedIngredients(allIngredients);
+              setIngredientSources(sourceMap);
+              
+              // Complete processing
+              setIsLoading(false);
+              setProcessingStatus(prev => ({
+                ...prev,
+                inProgress: false
+              }));
+              
+              // Move to the next step
+              setCurrentStep(STEPS.EDIT_INGREDIENTS);
+            }
+          })
+          .catch(error => {
+            console.error(`Error identifying ingredients for image ${fileIndex + 1}:`, error);
+            
+            // Still count this as processed even if it failed
+            processedCount++;
+            setProcessingStatus(prev => ({
+              ...prev,
+              processed: processedCount
+            }));
+            
+            // When all images are processed (even with some failures)
+            if (processedCount === files.length) {
+              // If we have no ingredients at all, use defaults
+              if (allIngredients.length === 0) {
+                const defaultIngredients = ['tomato', 'onion', 'garlic', 'bell pepper', 'olive oil', 'pasta'];
+                setDetectedIngredients(defaultIngredients);
+                setEditedIngredients(defaultIngredients);
+                
+                // Create default source map
+                const defaultSourceMap = {};
+                defaultIngredients.forEach(ingredient => {
+                  defaultSourceMap[ingredient] = 0;
+                });
+                setIngredientSources(defaultSourceMap);
+              } else {
+                // Use whatever ingredients we did manage to detect
+                setDetectedIngredients(allIngredients);
+                setEditedIngredients(allIngredients);
+                setIngredientSources(sourceMap);
+              }
+              
+              // Complete processing
+              setIsLoading(false);
+              setProcessingStatus(prev => ({
+                ...prev,
+                inProgress: false
+              }));
+              
+              // Move to the next step
+              setCurrentStep(STEPS.EDIT_INGREDIENTS);
+            }
+          });
+        };
+        reader.readAsDataURL(file);
+      });
     }
-  }, []);
-
-  // API integration code - separated for future implementation
-  const identifyIngredientsFromAPI = useCallback((imageData) => {
-    // This function would call the backend API to identify ingredients
-    // For now, it's just a placeholder that would be implemented by someone else
-    console.log('API integration to be implemented by another developer');
-    
-    // Return mock data for now
-    return Promise.resolve({
-      ingredients: ['tomato', 'onion', 'garlic', 'bell pepper', 'olive oil', 'pasta']
-    });
   }, []);
   
   // Add ingredient to the edited list
@@ -240,31 +331,58 @@ export const RecipeProvider = ({ children }) => {
   }, []);
   
   // Bookmark the selected recipe
-  const handleBookmarkSelectedRecipe = useCallback(() => {
+  const handleBookmarkSelectedRecipe = useCallback(async () => {
     if (!selectedRecipe) return;
     
-    const recipeToBookmark = {
-      ...selectedRecipe,
-      id: selectedRecipe.id || Date.now().toString(),
-      bookmarkedAt: new Date().toISOString()
-    };
-    
-    const updatedBookmarks = [...bookmarkedRecipes, recipeToBookmark];
-    setBookmarkedRecipes(updatedBookmarks);
-    
     try {
-      localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
+      if (currentUser) {
+        // If user is signed in, use Firebase bookmarking
+        const recipeToBookmark = {
+          name: selectedRecipe.name,
+          ingredients: selectedRecipe.ingredients,
+          instructions: selectedRecipe.instructions || [],
+          cookingTime: selectedRecipe.cookingTime || '',
+          difficulty: selectedRecipe.difficulty || '',
+          cuisine: selectedRecipe.cuisine || '',
+          imageUrl: image // Include the original image
+        };
+        
+        await addToBookmarks(recipeToBookmark);
+        console.log('Selected recipe bookmarked in Firebase');
+      } else {
+        // For guest mode, continue using localStorage
+        const recipeToBookmark = {
+          ...selectedRecipe,
+          id: selectedRecipe.id || Date.now().toString(),
+          bookmarkedAt: new Date().toISOString()
+        };
+        
+        const updatedBookmarks = [...bookmarkedRecipes, recipeToBookmark];
+        setBookmarkedRecipes(updatedBookmarks);
+        
+        try {
+          localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
+        } catch (error) {
+          console.error('Failed to save bookmark:', error);
+        }
+      }
     } catch (error) {
-      console.error('Failed to save bookmark:', error);
+      console.error('Error bookmarking selected recipe:', error);
     }
     
     // Move to done screen
     setCurrentStep(STEPS.DONE);
-  }, [selectedRecipe, bookmarkedRecipes]);
+  }, [selectedRecipe, bookmarkedRecipes, currentUser, addToBookmarks, image]);
   
   // Move to bookmarks screen
-  const handleGoToBookmarks = useCallback(() => {
+  const handleGoToBookmarks = useCallback((setCurrentPage) => {
+    // Update the current step
     setCurrentStep(STEPS.BOOKMARKS);
+    
+    // Update the current page if setCurrentPage is provided
+    if (setCurrentPage) {
+      setCurrentPage('bookmarks');
+    }
   }, []);
   
   // Start over with a new recipe
@@ -364,67 +482,102 @@ export const RecipeProvider = ({ children }) => {
     setTimeout(() => setShowSuggestions(false), 200);
   }, []);
 
-  const handleBookmarkRecipe = useCallback(() => {
+  const handleBookmarkRecipe = useCallback(async () => {
     if (!recipe) return;
     
-    const recipeToBookmark = {
-      ...recipe,
-      id: Date.now().toString(),
-      bookmarkedAt: new Date().toISOString(),
-      image: image // Include the original image
-    };
-    
-    const updatedBookmarks = [...bookmarkedRecipes, recipeToBookmark];
-    setBookmarkedRecipes(updatedBookmarks);
-    
     try {
-      localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
-    } catch (error) {
-      console.error('Failed to save bookmark:', error);
-      // If localStorage is full, try to clear old bookmarks
-      if (error.name === 'QuotaExceededError') {
-        const reducedBookmarks = updatedBookmarks.slice(-3); // Keep only last 3 to save space
-        setBookmarkedRecipes(reducedBookmarks);
+      if (currentUser) {
+        // If user is signed in, use Firebase bookmarking
+        const recipeToBookmark = {
+          name: recipe.name,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+          cookingTime: recipe.cookingTime,
+          difficulty: recipe.difficulty,
+          cuisine: recipe.cuisine || '',
+          imageUrl: image // Include the original image
+        };
+        
+        await addToBookmarks(recipeToBookmark);
+        console.log('Recipe bookmarked in Firebase');
+      } else {
+        // For guest mode, continue using localStorage
+        const recipeToBookmark = {
+          ...recipe,
+          id: Date.now().toString(),
+          bookmarkedAt: new Date().toISOString(),
+          image: image // Include the original image
+        };
+        
+        const updatedBookmarks = [...bookmarkedRecipes, recipeToBookmark];
+        setBookmarkedRecipes(updatedBookmarks);
+        
         try {
-          localStorage.setItem('bookmarkedRecipes', JSON.stringify(reducedBookmarks));
-        } catch (retryError) {
-          console.error('Still unable to save bookmarks:', retryError);
-          // If still failing, save without images
-          const bookmarksWithoutImages = reducedBookmarks.map(bookmark => ({
-            ...bookmark,
-            image: null
-          }));
-          localStorage.setItem('bookmarkedRecipes', JSON.stringify(bookmarksWithoutImages));
+          localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
+        } catch (error) {
+          console.error('Failed to save bookmark:', error);
+          // If localStorage is full, try to clear old bookmarks
+          if (error.name === 'QuotaExceededError') {
+            const reducedBookmarks = updatedBookmarks.slice(-3); // Keep only last 3 to save space
+            setBookmarkedRecipes(reducedBookmarks);
+            localStorage.setItem('bookmarkedRecipes', JSON.stringify(reducedBookmarks));
+          }
         }
       }
+    } catch (error) {
+      console.error('Error bookmarking recipe:', error);
     }
-  }, [recipe, bookmarkedRecipes, image]);
+  }, [recipe, bookmarkedRecipes, image, currentUser, addToBookmarks]);
 
   const isRecipeBookmarked = useCallback(() => {
     if (!recipe) return false;
-    return bookmarkedRecipes.some(bookmarked => 
-      bookmarked.name === recipe.name && 
-      bookmarked.ingredients.length === recipe.ingredients.length
-    );
-  }, [recipe, bookmarkedRecipes]);
+    
+    if (currentUser) {
+      // If user is signed in, use Firebase bookmarking check
+      const firebaseBookmark = bookmarks.find(bookmark => 
+        bookmark.title === recipe.name && 
+        bookmark.ingredients.length === recipe.ingredients.length
+      );
+      return !!firebaseBookmark;
+    } else {
+      // For guest mode, continue using localStorage check
+      return bookmarkedRecipes.some(bookmarked => 
+        bookmarked.name === recipe.name && 
+        bookmarked.ingredients.length === recipe.ingredients.length
+      );
+    }
+  }, [recipe, bookmarkedRecipes, currentUser, bookmarks]);
 
-  const handleRemoveBookmark = useCallback((recipeId) => {
-    const updatedBookmarks = bookmarkedRecipes.filter(bookmark => bookmark.id !== recipeId);
-    setBookmarkedRecipes(updatedBookmarks);
-    localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
-  }, [bookmarkedRecipes]);
+  const handleRemoveBookmark = useCallback(async (recipeId) => {
+    try {
+      if (currentUser) {
+        // If user is signed in, use Firebase bookmarking
+        await removeFromBookmarks(recipeId);
+        console.log('Recipe removed from Firebase bookmarks');
+      } else {
+        // For guest mode, continue using localStorage
+        const updatedBookmarks = bookmarkedRecipes.filter(bookmark => bookmark.id !== recipeId);
+        setBookmarkedRecipes(updatedBookmarks);
+        localStorage.setItem('bookmarkedRecipes', JSON.stringify(updatedBookmarks));
+      }
+    } catch (error) {
+      console.error('Error removing bookmark:', error);
+    }
+  }, [bookmarkedRecipes, currentUser, removeFromBookmarks]);
 
-  const handleViewRecipe = useCallback((bookmarkedRecipe) => {
+  const handleViewRecipe = useCallback((bookmarkedRecipe, setCurrentPage) => {
     setViewingRecipe(bookmarkedRecipe);
-    setImage(bookmarkedRecipe.image); // Set the original image
-    setCurrentStep(STEPS.RECIPE_VIEW);
-    // STEPS is a constant and doesn't need to be in the dependency array
+    setImage(bookmarkedRecipe.image || bookmarkedRecipe.imageUrl); // Set the original image
+    
+    // Update the current page to recipe-view
+    if (setCurrentPage) {
+      setCurrentPage('recipe-view');
+    }
   }, []);
 
   const handleBackToBookmarks = useCallback(() => {
     setViewingRecipe(null);
     setCurrentStep(STEPS.BOOKMARKS);
-    // STEPS is a constant and doesn't need to be in the dependency array
   }, []);
 
   const handleRatingChange = useCallback((recipeId, rating) => {
@@ -456,7 +609,7 @@ export const RecipeProvider = ({ children }) => {
     setCuisineKeywords('');
     setNewIngredient('');
     setIsEditingIngredients(false);
-  }, []);
+  }, [setImage, setRecipe, setCookingTime, setCuisineKeywords, setNewIngredient, setIsEditingIngredients]);
 
   // Value object to be provided to consumers
   const contextValue = {
@@ -465,14 +618,20 @@ export const RecipeProvider = ({ children }) => {
     STEPS,
     
     // Image state
+    images, setImages,
     image, setImage,
+    currentImageIndex, setCurrentImageIndex,
     
     // Ingredients state
     detectedIngredients, setDetectedIngredients,
+    ingredientSources, setIngredientSources,
     editedIngredients, setEditedIngredients,
     newIngredient, setNewIngredient,
     showSuggestions, setShowSuggestions,
     filteredSuggestions, setFilteredSuggestions,
+    
+    // Processing status
+    processingStatus,
     
     // Preferences state
     cookingTime, setCookingTime,
@@ -502,7 +661,6 @@ export const RecipeProvider = ({ children }) => {
     handleBookmarkSelectedRecipe,
     handleGoToBookmarks,
     handleStartOver,
-    identifyIngredientsFromAPI,
     
     // Utility methods
     getIngredientEmoji,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRecipe } from '../../context/RecipeContext';
 import IngredientItem from '../utils/IngredientItem';
 import './RecipeFlow.css';
@@ -17,8 +17,14 @@ const EditIngredientsScreen = () => {
     handleIngredientInputFocus,
     handleIngredientInputBlur,
     handleSuggestionClick,
-    handleIngredientsComplete
+    handleIngredientsComplete,
+    images,
+    ingredientSources,
+    processingStatus
   } = useRecipe();
+  
+  // State for showing image tooltip
+  const [hoveredIngredient, setHoveredIngredient] = useState(null);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
@@ -32,6 +38,13 @@ const EditIngredientsScreen = () => {
         <h2 className="ingredients-title">We Found These Ingredients</h2>
         <p className="ingredients-subtitle">Add or remove ingredients to customize your recipe</p>
         
+        {processingStatus.inProgress && (
+          <div className="processing-status">
+            <div className="processing-spinner"></div>
+            <p>Processing images: {processingStatus.processed} of {processingStatus.total}</p>
+          </div>
+        )}
+        
         <div className="ingredients-list">
           {editedIngredients.length === 0 ? (
             <div className="no-ingredients">
@@ -39,7 +52,12 @@ const EditIngredientsScreen = () => {
             </div>
           ) : (
             editedIngredients.map((ingredient, index) => (
-              <div key={index} className="ingredient-item-container">
+              <div 
+                key={index} 
+                className="ingredient-item-container"
+                onMouseEnter={() => setHoveredIngredient(ingredient)}
+                onMouseLeave={() => setHoveredIngredient(null)}
+              >
                 <IngredientItem
                   ingredient={ingredient}
                   index={index}
@@ -47,6 +65,27 @@ const EditIngredientsScreen = () => {
                   isEditing={true}
                   onRemove={handleRemoveIngredientFromList}
                 />
+                
+                {/* Source indicator */}
+                {ingredientSources && ingredientSources[ingredient] !== undefined && (
+                  <div className="source-indicator" title={`From image ${ingredientSources[ingredient] + 1}`}>
+                    {ingredientSources[ingredient] + 1}
+                  </div>
+                )}
+                
+                {/* Image tooltip */}
+                {hoveredIngredient === ingredient && images[ingredientSources[ingredient]] && (
+                  <div className="image-tooltip">
+                    <div className="tooltip-image-container">
+                      <img 
+                        src={images[ingredientSources[ingredient]]} 
+                        alt={`Source of ${ingredient}`} 
+                        className="tooltip-image"
+                      />
+                    </div>
+                    <div className="tooltip-text">From image {ingredientSources[ingredient] + 1}</div>
+                  </div>
+                )}
               </div>
             ))
           )}

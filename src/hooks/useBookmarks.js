@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
   addBookmark, 
   removeBookmark, 
+  isRecipeBookmarked,
   updateBookmarkRating
 } from '../services/bookmarkService';
 import { 
@@ -211,4 +212,3 @@ export const useBookmarks = (userId = null) => {
     getCount
   };
 };
-

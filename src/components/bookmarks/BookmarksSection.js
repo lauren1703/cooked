@@ -1,4 +1,6 @@
 import React from 'react';
+import { useBookmarks } from '../../hooks/useBookmarks';
+import { useAuth } from '../../contexts/AuthContext';
 
 const BookmarksSection = ({ 
   bookmarkedRecipes, 
@@ -7,10 +9,20 @@ const BookmarksSection = ({
   recipeRatings,
   setCurrentPage 
 }) => {
+  // Get Firebase bookmarks
+  const { currentUser } = useAuth();
+  const { bookmarks, loading } = useBookmarks();
+  
+  // Use Firebase bookmarks if user is signed in, otherwise use localStorage bookmarks
+  const displayBookmarks = currentUser ? bookmarks : bookmarkedRecipes;
   return (
     <section className="bookmarks-section">
       <h2>Your Bookmarked Recipes</h2>
-      {bookmarkedRecipes.length === 0 ? (
+      {loading ? (
+        <div className="loading-bookmarks">
+          <p>Loading your bookmarks...</p>
+        </div>
+      ) : displayBookmarks.length === 0 ? (
         <div className="no-bookmarks">
           <p>No bookmarked recipes yet. Generate and bookmark some recipes to see them here!</p>
           <button 
@@ -23,19 +35,19 @@ const BookmarksSection = ({
       ) : (
         <>
           <div className="bookmarks-grid">
-            {bookmarkedRecipes.map((bookmarkedRecipe) => (
+            {displayBookmarks.map((bookmarkedRecipe) => (
               <div key={bookmarkedRecipe.id} className="bookmark-card">
                 <div className="bookmark-content">
                   <div className="bookmark-header">
-                    <h3>{bookmarkedRecipe.name}</h3>
+                    <h3>{currentUser ? bookmarkedRecipe.title : bookmarkedRecipe.name}</h3>
                     <span className="bookmark-icon">🔖</span>
                   </div>
                   <div className="bookmark-meta">
                     <span>⏱️ {bookmarkedRecipe.cookingTime}</span>
                     <span>⚡ {bookmarkedRecipe.difficulty}</span>
-                    {recipeRatings[bookmarkedRecipe.id] && (
+                    {(bookmarkedRecipe.rating || recipeRatings[bookmarkedRecipe.id]) && (
                       <span className="bookmark-rating">
-                        ⭐ {recipeRatings[bookmarkedRecipe.id]}/5
+                        ⭐ {bookmarkedRecipe.rating || recipeRatings[bookmarkedRecipe.id]}/5
                       </span>
                     )}
                   </div>
@@ -46,7 +58,7 @@ const BookmarksSection = ({
                   <div className="bookmark-actions">
                     <button 
                       className="view-recipe-btn"
-                      onClick={() => handleViewRecipe(bookmarkedRecipe)}
+                      onClick={() => handleViewRecipe(bookmarkedRecipe, setCurrentPage)}
                     >
                       👁️ View Recipe
                     </button>
@@ -58,7 +70,15 @@ const BookmarksSection = ({
                     </button>
                   </div>
                   <p className="bookmark-date">
-                    Bookmarked on {new Date(bookmarkedRecipe.bookmarkedAt).toLocaleDateString()}
+                    {currentUser && bookmarkedRecipe.createdAt ? (
+                      // Firebase timestamp format
+                      `Bookmarked on ${new Date(bookmarkedRecipe.createdAt.seconds * 1000).toLocaleDateString()}`
+                    ) : bookmarkedRecipe.bookmarkedAt ? (
+                      // localStorage date string format
+                      `Bookmarked on ${new Date(bookmarkedRecipe.bookmarkedAt).toLocaleDateString()}`
+                    ) : (
+                      'Recently bookmarked'
+                    )}
                   </p>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { 
   collection, 
   doc, 
+  addDoc, 
   setDoc,
   updateDoc,
   deleteDoc, 
@@ -236,4 +237,3 @@ export const updateBookmarkRating = async (userId, bookmarkId, rating) => {
     throw error;
   }
 };
-
