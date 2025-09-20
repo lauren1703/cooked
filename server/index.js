@@ -92,7 +92,7 @@ app.post('/api/generate-recipes', async (req, res) => {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.3,
+      temperature: 0.3,     // ✅ keeps output realistic
       top_p: 0.9,
       max_tokens: 2000
     });
