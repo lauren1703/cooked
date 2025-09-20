@@ -112,7 +112,7 @@ export const RecipeProvider = ({ children }) => {
           
           // Process ingredients for this image
           console.log(`Calling API to identify ingredients for image ${fileIndex + 1}...`);
-          fetch('http://localhost:5000/api/identify-ingredients', {
+          fetch('http://localhost:5001/api/identify-ingredients', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

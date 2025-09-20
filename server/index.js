@@ -5,7 +5,8 @@ const dotenv = require('dotenv');
 
 // Load environment variables from .env
 dotenv.config();
-console.log("✅ API key loaded?", !!process.env.OPENAI_API_KEY);
+console.log("✅ OpenAI API key loaded?", !!process.env.OPENAI_API_KEY);
+console.log("✅ Claude API key loaded?", !!process.env.ANTHROPIC_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,9 +15,11 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize OpenAI client (prepare for later recipe generation)
-// Using official openai SDK. Ensure OPENAI_API_KEY is set in .env
+// Initialize AI providers
 let openai = null;
+let anthropic = null;
+
+// Initialize OpenAI client
 try {
   const OpenAI = require('openai');
   openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -24,12 +27,20 @@ try {
   console.warn('OpenAI SDK not initialized. Install "openai" and set OPENAI_API_KEY in .env to use it.');
 }
 
+// Initialize Claude client
+try {
+  const Anthropic = require('@anthropic-ai/sdk');
+  anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+} catch (err) {
+  console.warn('Claude SDK not initialized. Install "@anthropic-ai/sdk" and set ANTHROPIC_API_KEY in .env to use it.');
+}
+
 // Health/test route
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Server running' });
 });
 
-// Recipe generation endpoint
+// Recipe generation endpoint with multiple AI providers and validation
 app.post('/api/generate-recipes', async (req, res) => {
   try {
     const { ingredients, cuisine, targetTime, variations } = req.body;
@@ -48,11 +59,114 @@ app.post('/api/generate-recipes', async (req, res) => {
       return res.status(400).json({ error: 'Variations must be between 1 and 5' });
     }
 
-    if (!openai) {
-      return res.status(500).json({ error: 'OpenAI not configured. Please set OPENAI_API_KEY in .env' });
+    // Try multiple AI providers in order of preference
+    let recipeData = null;
+    let usedProvider = 'fallback';
+
+    // Try Claude first (often better for creative tasks)
+    if (anthropic) {
+      try {
+        console.log('🤖 Attempting recipe generation with Claude...');
+        recipeData = await generateRecipesWithClaude(ingredients, cuisine, targetTime, variations);
+        usedProvider = 'claude';
+        console.log('✅ Claude recipe generation successful');
+      } catch (claudeError) {
+        console.error('🔥 Claude API error:', claudeError.message);
+      }
     }
 
-    const systemPrompt = `You are a professional chef and recipe developer. Generate sophisticated, restaurant-quality recipes that follow these STRICT rules:
+    // Try OpenAI if Claude failed
+    if (!recipeData && openai) {
+      try {
+        console.log('🤖 Attempting recipe generation with OpenAI...');
+        recipeData = await generateRecipesWithOpenAI(ingredients, cuisine, targetTime, variations);
+        usedProvider = 'openai';
+        console.log('✅ OpenAI recipe generation successful');
+      } catch (openaiError) {
+        console.error('🔥 OpenAI API error:', openaiError.message);
+      }
+    }
+
+    // Use fallback if both AI providers failed
+    if (!recipeData) {
+      console.log('🔄 Using fallback recipe generation...');
+      recipeData = { recipes: generateFallbackRecipes(ingredients, cuisine, targetTime, variations) };
+      usedProvider = 'fallback';
+    }
+
+    // Validate and enhance recipes with AI validation
+    if (recipeData && recipeData.recipes) {
+      console.log('🔍 Validating recipes with AI...');
+      const validatedRecipes = await validateRecipesWithAI(recipeData.recipes, ingredients, targetTime);
+      recipeData.recipes = validatedRecipes;
+    }
+
+    // Add metadata about generation
+    recipeData.metadata = {
+      provider: usedProvider,
+      timestamp: new Date().toISOString(),
+      validation: 'ai-enhanced'
+    };
+
+    res.json(recipeData);
+
+  } catch (error) {
+    console.error('Recipe generation error:', error);
+    res.status(500).json({ error: 'Recipe generation failed' });
+  }
+});
+
+// Enhanced AI recipe generation functions
+async function generateRecipesWithClaude(ingredients, cuisine, targetTime, variations) {
+  const systemPrompt = `You are a world-class chef and recipe developer with expertise in ${cuisine} cuisine. Create sophisticated, restaurant-quality recipes that are both creative and practical for home cooking.
+
+CRITICAL REQUIREMENTS:
+1. Use ONLY the provided ingredients plus common pantry staples (oil, salt, pepper, butter, water, basic herbs, flour, eggs, vinegar, lemon, garlic, onion, spices)
+2. Each recipe must be COMPLETELY DIFFERENT with unique cooking methods, flavor profiles, and techniques
+3. Cooking times must be realistic and achievable for home cooks
+4. Include specific quantities, temperatures, and timing for all steps
+5. Use professional cooking techniques: searing, braising, roasting, grilling, sautéing, etc.
+6. Add sophisticated touches like proper seasoning, visual cues, and presentation tips
+
+Return ONLY valid JSON in this exact format:
+{
+  "recipes": [
+    {
+      "id": "unique-slug",
+      "name": "Recipe Name",
+      "type": "quick|full|creative",
+      "cuisine": "Cuisine Type",
+      "cookingTimeMinutes": 30,
+      "difficulty": "Easy|Medium|Hard",
+      "ingredients": ["1 cup ingredient", "2 tbsp another ingredient"],
+      "instructions": ["Step 1", "Step 2", "Step 3"]
+    }
+  ]
+}`;
+
+  const userPrompt = `Create ${variations} sophisticated ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}. Target cooking time: ${targetTime} minutes.
+
+Make each recipe completely unique with different:
+- Cooking methods (braise vs grill vs stir-fry vs roast)
+- Flavor profiles (spicy vs mild vs tangy vs rich)
+- Dish types (hearty vs light vs creamy vs crispy)
+- Techniques and presentation styles`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 4000,
+    temperature: 0.7,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }]
+  });
+
+  const responseText = response.content[0].text;
+  const cleanedResponse = responseText.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  return JSON.parse(cleanedResponse);
+}
+
+async function generateRecipesWithOpenAI(ingredients, cuisine, targetTime, variations) {
+  const systemPrompt = `You are a professional chef and recipe developer. Generate sophisticated, restaurant-quality recipes that follow these STRICT rules:
 
 1. ONLY use the provided ingredients plus common pantry staples: oil, salt, pepper, butter, water, sugar, basic herbs (oregano, basil, thyme, rosemary, parsley, cilantro), flour, eggs, milk, vinegar, lemon juice, garlic powder, onion powder, paprika, cumin, bay leaves, wine, broth, cream, cheese, nuts, seeds.
 
@@ -74,9 +188,9 @@ app.post('/api/generate-recipes', async (req, res) => {
 7. Recipes must be feasible for home cooking with standard kitchen equipment.
 
 8. CRITICAL: Each recipe variation must be COMPLETELY DIFFERENT from the others:
-   - Use different cooking methods (braised vs. grilled vs. stir-fried)
-   - Create different dish types (hearty stew vs. light salad vs. rich pasta)
-   - Vary the flavor profiles significantly (Mediterranean vs. Asian vs. French)
+   - Use different cooking methods and techniques
+   - Create different dish types and presentations
+   - Vary the flavor profiles and seasoning approaches
    - Use different combinations of the provided ingredients
    - Include different pantry staples and seasonings for each recipe
    - Make instructions completely unique with different techniques and timing
@@ -105,94 +219,172 @@ app.post('/api/generate-recipes', async (req, res) => {
   ]
 }`;
 
-    const userPrompt = `Generate ${variations} ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}. Target cooking time: ${targetTime} minutes.`;
+  const userPrompt = `Create ${variations} SOPHISTICATED, COMPLETELY DIFFERENT ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}.
+            
+Target cooking time: ${targetTime} minutes.
+            
+REQUIREMENTS FOR MAXIMUM DIVERSITY AND CREATIVITY:
+- Each recipe should showcase completely different cooking approaches and styles
+- Explore various cooking techniques, flavor profiles, and presentation methods
+- Be creative with ingredient combinations and cooking methods
+- Vary the complexity, texture, and visual appeal of each dish
+- Use professional techniques that highlight the unique qualities of the ingredients
+            
+Each recipe must have:
+- Unique cooking techniques and methods (choose from any appropriate techniques)
+- Distinct dish categories and styles (be creative with presentation and concept)
+- Different flavor profiles and seasoning approaches (explore various culinary traditions)
+- Creative ingredient combinations and sophisticated seasonings
+- 6-15 detailed professional steps with specific techniques
+- Visual cues, temperature guidance, and timing details
+- Professional finishing touches and garnishing suggestions
+            
+Make each recipe feel like it came from a different restaurant kitchen with unique techniques, flavors, and presentation styles.`;
 
-    let responseText;
-    try {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.8,
+    top_p: 0.95,
+    max_tokens: 3000,
+    response_format: { type: "json_object" }
+  });
+
+  const responseText = completion.choices[0].message.content;
+  const cleanedResponse = responseText.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  return JSON.parse(cleanedResponse);
+}
+
+// AI-powered recipe validation function
+async function validateRecipesWithAI(recipes, userIngredients, targetTime) {
+  if (!openai && !anthropic) {
+    console.log('⚠️ No AI providers available for validation, returning original recipes');
+    return recipes;
+  }
+
+  const validationPrompt = `You are a professional chef and recipe validator. Analyze these recipes for accuracy, feasibility, and quality. For each recipe, check:
+
+1. COOKING TIME VALIDATION:
+   - Are the cooking times realistic for the techniques used?
+   - Do prep time + cook time = total time?
+   - Are there any impossible time combinations?
+
+2. INGREDIENT COMBINATION VALIDATION:
+   - Do the ingredient combinations make culinary sense?
+   - Are there any conflicting flavors or textures?
+   - Are the quantities proportional and realistic?
+
+3. TECHNIQUE VALIDATION:
+   - Are the cooking techniques appropriate for the ingredients?
+   - Do the instructions follow proper cooking sequences?
+   - Are temperatures and methods correctly specified?
+
+4. FEASIBILITY VALIDATION:
+   - Can this be made with standard home kitchen equipment?
+   - Are all ingredients accessible to home cooks?
+   - Is the difficulty level appropriate for the techniques?
+
+For each recipe, provide:
+- Overall validation score (1-10)
+- Specific issues found (if any)
+- Suggested improvements
+- Confirmed accuracy of cooking times and techniques
+
+Return ONLY valid JSON in this format:
+{
+  "validatedRecipes": [
+    {
+      "id": "recipe-id",
+      "validationScore": 8,
+      "issues": ["minor issue 1", "minor issue 2"],
+      "improvements": ["suggestion 1", "suggestion 2"],
+      "isValid": true,
+      "cookingTimeAccuracy": "accurate|slightly-off|needs-adjustment",
+      "techniqueAccuracy": "excellent|good|needs-work"
+    }
+  ]
+}`;
+
+  try {
+    let response;
+    if (anthropic) {
+      response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        temperature: 0.3,
+        system: validationPrompt,
+        messages: [{ 
+          role: 'user', 
+          content: `Validate these recipes:\n\n${JSON.stringify(recipes, null, 2)}\n\nUser ingredients: ${userIngredients.join(', ')}\nTarget time: ${targetTime} minutes` 
+        }]
+      });
+      const responseText = response.content[0].text;
+      const cleanedResponse = responseText.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      const validationResult = JSON.parse(cleanedResponse);
+      
+      // Apply validation results to recipes
+      return recipes.map(recipe => {
+        const validation = validationResult.validatedRecipes.find(v => v.id === recipe.id);
+        if (validation) {
+          return {
+            ...recipe,
+            validation: {
+              score: validation.validationScore,
+              issues: validation.issues || [],
+              improvements: validation.improvements || [],
+              isValid: validation.isValid,
+              cookingTimeAccuracy: validation.cookingTimeAccuracy,
+              techniqueAccuracy: validation.techniqueAccuracy
+            }
+          };
+        }
+        return recipe;
+      });
+    } else if (openai) {
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: systemPrompt },
-          {role: 'user', 
-            content: `Create ${variations} SOPHISTICATED, COMPLETELY DIFFERENT ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}.
-            
-            Target cooking time: ${targetTime} minutes.
-            
-            REQUIREMENTS FOR MAXIMUM DIVERSITY AND COMPLEXITY:
-            - Recipe 1: Use braising or slow-cooking method, create a hearty, complex dish
-            - Recipe 2: Use grilling or high-heat roasting, create a charred, smoky dish  
-            - Recipe 3: Use stir-frying or quick-sautéing, create a fresh, vibrant dish
-            
-            Each recipe must have:
-            - COMPLETELY different cooking techniques (braise vs. grill vs. stir-fry)
-            - Different dish categories (hearty stew vs. charred platter vs. fresh bowl)
-            - Distinct flavor profiles (Mediterranean vs. Asian vs. French techniques)
-            - Different ingredient combinations and sophisticated seasonings
-            - 6-12 detailed professional steps with specific techniques
-            - Visual cues, temperature guidance, and timing details
-            - Professional finishing touches and garnishing suggestions
-            
-            Make each recipe feel like it came from a different restaurant kitchen with unique techniques, flavors, and presentation styles.` 
-        }
+          { role: 'system', content: validationPrompt },
+          { role: 'user', content: `Validate these recipes:\n\n${JSON.stringify(recipes, null, 2)}\n\nUser ingredients: ${userIngredients.join(', ')}\nTarget time: ${targetTime} minutes` }
         ],
-        temperature: 0.8,     // keeps output realistic
-        top_p: 0.95,
+        temperature: 0.3,
         max_tokens: 2000,
-        response_format: { type: "json_object" }  // <-- force JSON
+        response_format: { type: "json_object" }
       });
-
-      responseText = completion.choices[0].message.content;
-
-    } catch (apiError) {
-      console.error("🔥 OpenAI API error:", apiError.response ? apiError.response.data : apiError.message);
-    
-      // Generate fallback recipes if API call fails
-      console.log("🔄 Using fallback recipe generation...");
-      const fallbackRecipes = generateFallbackRecipes(ingredients, cuisine, targetTime, variations);
-      return res.json({ recipes: fallbackRecipes });
+      
+      const responseText = completion.choices[0].message.content;
+      const cleanedResponse = responseText.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      const validationResult = JSON.parse(cleanedResponse);
+      
+      // Apply validation results to recipes
+      return recipes.map(recipe => {
+        const validation = validationResult.validatedRecipes.find(v => v.id === recipe.id);
+        if (validation) {
+          return {
+            ...recipe,
+            validation: {
+              score: validation.validationScore,
+              issues: validation.issues || [],
+              improvements: validation.improvements || [],
+              isValid: validation.isValid,
+              cookingTimeAccuracy: validation.cookingTimeAccuracy,
+              techniqueAccuracy: validation.techniqueAccuracy
+            }
+          };
+        }
+        return recipe;
+      });
     }
-    
-    // Clean response - remove code fences if present
-    let cleanedResponse = responseText.trim();
-    if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-
-    // Parse and validate JSON
-    let recipeData;
-    try {
-      recipeData = JSON.parse(cleanedResponse);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Response text:', responseText);
-      return res.status(500).json({ error: 'Recipe generation failed - invalid response format' });
-    }
-
-    // Validate response structure
-    if (!recipeData.recipes || !Array.isArray(recipeData.recipes)) {
-      console.error('Invalid response structure:', recipeData);
-      return res.status(500).json({ error: 'Recipe generation failed - invalid response structure' });
-    }
-
-    // Validate each recipe has required fields
-    for (const recipe of recipeData.recipes) {
-      if (!recipe.id || !recipe.name || !recipe.type || !recipe.cuisine || 
-          !recipe.cookingTimeMinutes || !recipe.difficulty || 
-          !Array.isArray(recipe.ingredients) || !Array.isArray(recipe.instructions)) {
-        console.error('Invalid recipe structure:', recipe);
-        return res.status(500).json({ error: 'Recipe generation failed - invalid recipe structure' });
-      }
-    }
-
-    res.json(recipeData);
-
   } catch (error) {
-    console.error('Recipe generation error:', error);
-    res.status(500).json({ error: 'Recipe generation failed' });
+    console.error('Recipe validation error:', error);
+    return recipes; // Return original recipes if validation fails
   }
-});
+  
+  return recipes;
+}
 
 // Function to generate fallback recipes when the OpenAI API is unavailable
 function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
@@ -294,6 +486,15 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
       ['2 tablespoons sesame oil', '2 tablespoons soy sauce', '1 tablespoon rice vinegar', '1 teaspoon sriracha', 'Green onions and sesame seeds'],
       ['3 tablespoons coconut oil', '1 can coconut milk', '2 teaspoons curry powder', '1 tablespoon fish sauce', 'Fresh lime and cilantro'],
       ['2 tablespoons duck fat', '1 cup dry white wine', '2 sprigs rosemary', '1 teaspoon juniper berries', 'Coarse sea salt']
+      ['1 tablespoon olive oil', 'Salt and pepper to taste'],
+      ['2 teaspoons butter', '1 clove garlic, minced'],
+      ['1 tablespoon vegetable oil', '1 teaspoon dried oregano'],
+      ['1 tablespoon lemon juice', '1 teaspoon parsley flakes'],
+      ['1 teaspoon paprika', '1 teaspoon onion powder', 'Pinch of sugar']
+      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon dried herbs (optional)'],
+      ['1 tablespoon oil', 'Salt and pepper to taste', '1 tablespoon lemon juice (optional)'],
+      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon paprika (optional)'],
+      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon oregano (optional)']
     ];
     
     // Add main ingredients with varied quantities

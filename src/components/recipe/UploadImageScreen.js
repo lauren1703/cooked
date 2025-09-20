@@ -42,7 +42,7 @@ const UploadImageScreen = () => {
         console.log(`Processing webcam image ${fileIndex + 1} of ${capturedImages.length}...`);
         
         // Call the API to identify ingredients from each image
-        fetch('http://localhost:5000/api/identify-ingredients', {
+        fetch('http://localhost:5001/api/identify-ingredients', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
