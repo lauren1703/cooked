@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 
 // Load environment variables from .env
 dotenv.config();
+console.log("✅ API key loaded?", !!process.env.OPENAI_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -67,7 +68,15 @@ app.post('/api/generate-recipes', async (req, res) => {
 
 7. Recipes must be feasible for home cooking with standard kitchen equipment.
 
-8. Return ONLY valid JSON in this exact format - no markdown, no code fences, no extra text:
+8. CRITICAL: Each recipe variation must be COMPLETELY DIFFERENT from the others:
+   - Use different cooking methods (stir-fry vs. baked vs. one-pot)
+   - Create different dish types (soup vs. salad vs. pasta vs. casserole)
+   - Vary the flavor profiles and seasonings significantly
+   - Use different combinations of the provided ingredients
+   - Include different pantry staples for each recipe
+   - Make instructions completely unique, not just reworded versions
+
+9. Return ONLY valid JSON in this exact format - no markdown, no code fences, no extra text:
 
 {
   "recipes": [
@@ -92,18 +101,39 @@ app.post('/api/generate-recipes', async (req, res) => {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
+          {role: 'user', 
+            content: `Create ${variations} COMPLETELY DIFFERENT ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}.
+            
+            Target cooking time: ${targetTime} minutes.
+            
+            REQUIREMENTS FOR DIVERSITY:
+            - Recipe 1: Use a stir-fry or sauté method, create a main dish
+            - Recipe 2: Use baking or roasting method, create a different dish type (soup, salad, casserole, etc.)
+            - Recipe 3: Use a one-pot or simmering method, create yet another dish type
+            
+            Each recipe must have:
+            - Different cooking techniques
+            - Different dish categories (main course, soup, salad, pasta, etc.)
+            - Different flavor profiles and seasonings
+            - Different ingredient combinations and quantities
+            - Completely unique step-by-step instructions
+            
+            Make each recipe feel like a completely different meal, not just variations of the same dish.` 
+        }
         ],
-        temperature: 0.3,     // keeps output realistic
-        top_p: 0.9,
-        max_tokens: 2000
+        temperature: 0.8,     // keeps output realistic
+        top_p: 0.95,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }  // <-- force JSON
       });
 
       responseText = completion.choices[0].message.content;
+
     } catch (apiError) {
-      console.error('OpenAI API error:', apiError);
-      
+      console.error("🔥 OpenAI API error:", apiError.response ? apiError.response.data : apiError.message);
+    
       // Generate fallback recipes if API call fails
+      console.log("🔄 Using fallback recipe generation...");
       const fallbackRecipes = generateFallbackRecipes(ingredients, cuisine, targetTime, variations);
       return res.json({ recipes: fallbackRecipes });
     }
@@ -156,39 +186,95 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
   const types = ['quick', 'full', 'creative'];
   const difficulties = ['Easy', 'Medium', 'Hard'];
   
+  // Define different cooking methods and dish types for variety
+  const cookingMethods = [
+    {
+      name: 'Stir-fry',
+      instructions: [
+        'Heat oil in a large wok or skillet over high heat.',
+        'Add ingredients in order of cooking time (hardest first).',
+        'Stir constantly for even cooking.',
+        'Add sauce and toss to combine.',
+        'Serve immediately over rice or noodles.'
+      ]
+    },
+    {
+      name: 'One-pot',
+      instructions: [
+        'Heat oil in a large pot over medium heat.',
+        'Add aromatics and cook until fragrant.',
+        'Add main ingredients and liquid.',
+        'Bring to a boil, then reduce heat and simmer.',
+        'Cook until all ingredients are tender.',
+        'Season to taste and serve hot.'
+      ]
+    },
+    {
+      name: 'Baked',
+      instructions: [
+        'Preheat oven to 375°F (190°C).',
+        'Prepare ingredients and place in baking dish.',
+        'Drizzle with oil and seasonings.',
+        'Cover with foil and bake for 20 minutes.',
+        'Remove foil and bake until golden brown.',
+        'Let rest for 5 minutes before serving.'
+      ]
+    }
+  ];
+  
   // Generate the requested number of recipe variations
   for (let i = 0; i < variations; i++) {
     const id = `fallback-${i + 1}`;
     const type = types[i % types.length];
     const difficulty = difficulties[i % difficulties.length];
-    const cookingTimeMinutes = Math.min(Math.max(targetTime - 5 + (i * 10), 10), 120); // Vary cooking time slightly
+    const cookingMethod = cookingMethods[i % cookingMethods.length];
+    const cookingTimeMinutes = Math.min(Math.max(targetTime - 5 + (i * 10), 10), 120);
     
-    // Create a recipe name
+    // Create a recipe name with more variety
     const mainIngredient = ingredients[0] || 'Mixed';
-    const recipeName = `${cuisine} ${mainIngredient} ${type === 'quick' ? 'Express' : type === 'full' ? 'Classic' : 'Special'}`;
+    const dishTypes = ['Bowl', 'Skillet', 'Casserole', 'Salad', 'Soup', 'Pasta', 'Wrap'];
+    const dishType = dishTypes[i % dishTypes.length];
+    const recipeName = `${cuisine} ${mainIngredient} ${dishType}`;
     
-    // Generate ingredient quantities
-    const recipeIngredients = ingredients.map(ingredient => {
-      const quantity = Math.floor(Math.random() * 3) + 1;
-      const units = ['cup', 'tablespoon', 'teaspoon', 'piece'];
-      const unit = units[Math.floor(Math.random() * units.length)];
-      return `${quantity} ${unit}${quantity > 1 ? 's' : ''} of ${ingredient}`;
+    // Generate different ingredient quantities and add different pantry staples
+    const recipeIngredients = [];
+    const pantryStaples = [
+      ['1 tablespoon olive oil', 'Salt and pepper to taste'],
+      ['2 tablespoons butter', '1 clove garlic, minced', 'Salt and pepper to taste'],
+      ['1 tablespoon vegetable oil', '1 teaspoon dried oregano', 'Salt and pepper to taste'],
+      ['2 tablespoons olive oil', '1 tablespoon lemon juice', 'Salt and pepper to taste']
+    ];
+    
+    // Add main ingredients with varied quantities
+    ingredients.forEach((ingredient, index) => {
+      const quantities = [1, 2, 3];
+      const units = ['cup', 'tablespoon', 'teaspoon', 'piece', 'pound', 'ounce'];
+      const quantity = quantities[index % quantities.length];
+      const unit = units[index % units.length];
+      const unitText = quantity > 1 ? `${unit}s` : unit;
+      recipeIngredients.push(`${quantity} ${unitText} of ${ingredient}`);
     });
     
-    // Add some standard ingredients
-    recipeIngredients.push('1 tablespoon olive oil');
-    recipeIngredients.push('Salt and pepper to taste');
+    // Add different pantry staples for each recipe
+    const selectedPantry = pantryStaples[i % pantryStaples.length];
+    recipeIngredients.push(...selectedPantry);
     
-    // Generate instructions
-    const instructions = [
-      `Prepare all ingredients. Wash and chop ${ingredients.slice(0, 3).join(', ')}.`,
-      `Heat olive oil in a pan over medium heat.`,
-      `Add ${ingredients.slice(0, 2).join(' and ')} and cook for 5 minutes.`,
-      `Add remaining ingredients and stir well.`,
-      `Cook for ${Math.floor(cookingTimeMinutes / 2)} minutes until done.`,
-      `Season with salt and pepper to taste.`,
-      `Serve hot and enjoy!`
-    ];
+    // Generate varied instructions based on cooking method
+    const instructions = cookingMethod.instructions.map((step, stepIndex) => {
+      if (stepIndex === 1) { // Customize the aromatics step
+        const aromatics = ['onion', 'garlic', 'ginger', 'bell pepper'];
+        const selectedAromatic = aromatics[i % aromatics.length];
+        return `Add ${selectedAromatic} and cook until fragrant.`;
+      } else if (stepIndex === 2) { // Customize the main cooking step
+        const mainIngredient = ingredients[0] || 'main ingredients';
+        return `Add ${mainIngredient} and cook for ${Math.floor(cookingTimeMinutes / 4)} minutes.`;
+      } else if (stepIndex === 3) { // Customize the liquid/sauce step
+        const liquids = ['broth', 'wine', 'tomato sauce', 'coconut milk'];
+        const selectedLiquid = liquids[i % liquids.length];
+        return `Add ${selectedLiquid} and bring to a simmer.`;
+      }
+      return step;
+    });
     
     recipes.push({
       id,
@@ -206,7 +292,8 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+  console.log(`Server listening on 
+    http://localhost:${PORT}`);
 });
 
 
