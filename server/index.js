@@ -40,6 +40,53 @@ app.get('/api/hello', (req, res) => {
   res.json({ message: 'Server running' });
 });
 
+// Helper function to detect ingredient types and suggest appropriate recipe categories
+function analyzeIngredients(ingredients) {
+  const fruits = ['apple', 'banana', 'blueberry', 'strawberry', 'lemon', 'lime', 'orange', 'grape', 'cherry', 'peach', 'pear', 'plum', 'raspberry', 'blackberry', 'cranberry', 'mango', 'pineapple', 'kiwi', 'grapefruit', 'pomegranate', 'fig', 'date', 'coconut'];
+  const vegetables = ['tomato', 'onion', 'garlic', 'carrot', 'celery', 'pepper', 'broccoli', 'spinach', 'lettuce', 'cucumber', 'potato', 'sweet potato', 'zucchini', 'eggplant', 'mushroom', 'cabbage', 'cauliflower', 'asparagus', 'corn', 'peas', 'beans'];
+  const proteins = ['chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna', 'shrimp', 'eggs', 'tofu', 'lamb', 'turkey', 'duck', 'bacon', 'sausage', 'ham'];
+  const grains = ['rice', 'pasta', 'bread', 'quinoa', 'oats', 'barley', 'wheat', 'flour', 'noodles'];
+  const dairy = ['milk', 'cheese', 'yogurt', 'cream', 'butter', 'sour cream', 'cream cheese'];
+  
+  const detectedTypes = {
+    fruits: ingredients.filter(ing => fruits.some(fruit => ing.toLowerCase().includes(fruit))),
+    vegetables: ingredients.filter(ing => vegetables.some(veg => ing.toLowerCase().includes(veg))),
+    proteins: ingredients.filter(ing => proteins.some(prot => ing.toLowerCase().includes(prot))),
+    grains: ingredients.filter(ing => grains.some(grain => ing.toLowerCase().includes(grain))),
+    dairy: ingredients.filter(ing => dairy.some(d => ing.toLowerCase().includes(d)))
+  };
+  
+  // Determine primary ingredient type and suggest recipe categories
+  const totalFruits = detectedTypes.fruits.length;
+  const totalVegetables = detectedTypes.vegetables.length;
+  const totalProteins = detectedTypes.proteins.length;
+  
+  let recipeCategories = [];
+  let dishType = 'main course';
+  
+  if (totalFruits > 0 && totalFruits >= totalVegetables && totalFruits >= totalProteins) {
+    recipeCategories = ['dessert', 'smoothie', 'fruit salad', 'baked goods', 'breakfast'];
+    dishType = 'sweet/fruit-based';
+  } else if (totalVegetables > 0 && totalVegetables >= totalProteins) {
+    recipeCategories = ['salad', 'soup', 'stir-fry', 'roasted vegetables', 'vegetarian main'];
+    dishType = 'vegetable-based';
+  } else if (totalProteins > 0) {
+    recipeCategories = ['main course', 'grilled', 'braised', 'stir-fry', 'one-pot'];
+    dishType = 'protein-based';
+  } else {
+    recipeCategories = ['main course', 'side dish', 'appetizer', 'soup', 'salad'];
+    dishType = 'general';
+  }
+  
+  return {
+    detectedTypes,
+    recipeCategories,
+    dishType,
+    primaryType: totalFruits > totalVegetables && totalFruits > totalProteins ? 'fruits' : 
+                 totalVegetables > totalProteins ? 'vegetables' : 'proteins'
+  };
+}
+
 // Recipe generation endpoint with multiple AI providers and validation
 app.post('/api/generate-recipes', async (req, res) => {
   try {
@@ -59,6 +106,10 @@ app.post('/api/generate-recipes', async (req, res) => {
       return res.status(400).json({ error: 'Variations must be between 1 and 5' });
     }
 
+    // Analyze ingredients to determine appropriate recipe types
+    const ingredientAnalysis = analyzeIngredients(ingredients);
+    console.log('🔍 Ingredient analysis:', ingredientAnalysis);
+
     // Try multiple AI providers in order of preference
     let recipeData = null;
     let usedProvider = 'fallback';
@@ -67,7 +118,7 @@ app.post('/api/generate-recipes', async (req, res) => {
     if (anthropic) {
       try {
         console.log('🤖 Attempting recipe generation with Claude...');
-        recipeData = await generateRecipesWithClaude(ingredients, cuisine, targetTime, variations);
+        recipeData = await generateRecipesWithClaude(ingredients, cuisine, targetTime, variations, ingredientAnalysis);
         usedProvider = 'claude';
         console.log('✅ Claude recipe generation successful');
       } catch (claudeError) {
@@ -90,7 +141,7 @@ app.post('/api/generate-recipes', async (req, res) => {
     // Use fallback if both AI providers failed
     if (!recipeData) {
       console.log('🔄 Using fallback recipe generation...');
-      recipeData = { recipes: generateFallbackRecipes(ingredients, cuisine, targetTime, variations) };
+      recipeData = { recipes: generateFallbackRecipes(ingredients, cuisine, targetTime, variations, ingredientAnalysis) };
       usedProvider = 'fallback';
     }
 
@@ -117,8 +168,10 @@ app.post('/api/generate-recipes', async (req, res) => {
 });
 
 // Enhanced AI recipe generation functions
-async function generateRecipesWithClaude(ingredients, cuisine, targetTime, variations) {
-  const systemPrompt = `You are a world-class chef and recipe developer with expertise in ${cuisine} cuisine. Create sophisticated, restaurant-quality recipes that are both creative and practical for home cooking.
+async function generateRecipesWithClaude(ingredients, cuisine, targetTime, variations, ingredientAnalysis) {
+  const { recipeCategories, dishType, primaryType } = ingredientAnalysis;
+  
+  let systemPrompt = `You are a world-class chef and recipe developer with expertise in ${cuisine} cuisine. Create sophisticated, restaurant-quality recipes that are both creative and practical for home cooking.
 
 CRITICAL REQUIREMENTS:
 1. Use ONLY the provided ingredients plus common pantry staples (oil, salt, pepper, butter, water, basic herbs, flour, eggs, vinegar, lemon, garlic, onion, spices)
@@ -126,7 +179,29 @@ CRITICAL REQUIREMENTS:
 3. Cooking times must be realistic and achievable for home cooks
 4. Include specific quantities, temperatures, and timing for all steps
 5. Use professional cooking techniques: searing, braising, roasting, grilling, sautéing, etc.
-6. Add sophisticated touches like proper seasoning, visual cues, and presentation tips
+6. Add sophisticated touches like proper seasoning, visual cues, and presentation tips`;
+
+  // Add specific guidance based on ingredient type
+  if (primaryType === 'fruits') {
+    systemPrompt += `
+
+SPECIAL FRUIT INGREDIENT GUIDANCE:
+- These are FRUITS, so create appropriate sweet/fruity recipes
+- Focus on: desserts, smoothies, fruit salads, baked goods, breakfast items, fruit-based sauces
+- Use techniques like: baking, blending, macerating, poaching, grilling fruits
+- Create recipes like: fruit tarts, smoothie bowls, fruit compotes, fruit crumbles, fruit salads
+- Avoid treating fruits as vegetables in savory dishes`;
+  } else if (primaryType === 'vegetables') {
+    systemPrompt += `
+
+SPECIAL VEGETABLE INGREDIENT GUIDANCE:
+- These are VEGETABLES, so create appropriate savory recipes
+- Focus on: salads, soups, stir-fries, roasted vegetables, vegetarian mains
+- Use techniques like: roasting, sautéing, steaming, grilling, braising
+- Create recipes like: vegetable stir-fries, roasted vegetable medleys, vegetable soups, fresh salads`;
+  }
+
+  systemPrompt += `
 
 Return ONLY valid JSON in this exact format:
 {
@@ -144,7 +219,12 @@ Return ONLY valid JSON in this exact format:
   ]
 }`;
 
-  const userPrompt = `Create ${variations} sophisticated ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}. Target cooking time: ${targetTime} minutes.
+  let userPrompt = `Create ${variations} sophisticated ${cuisine} recipes using these ingredients: ${ingredients.join(', ')}. Target cooking time: ${targetTime} minutes.
+
+INGREDIENT ANALYSIS:
+- Primary ingredient type: ${primaryType}
+- Suggested recipe categories: ${recipeCategories.join(', ')}
+- Dish type: ${dishType}
 
 Make each recipe completely unique with different:
 - Cooking methods (braise vs grill vs stir-fry vs roast)
@@ -387,25 +467,66 @@ Return ONLY valid JSON in this format:
 }
 
 // Function to generate fallback recipes when the OpenAI API is unavailable
-function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
+function generateFallbackRecipes(ingredients, cuisine, targetTime, variations, ingredientAnalysis) {
   const recipes = [];
   const types = ['quick', 'full', 'creative'];
   const difficulties = ['Easy', 'Medium', 'Hard'];
+  const { primaryType, recipeCategories } = ingredientAnalysis;
   
   // Define different cooking methods and dish types for variety
-  const cookingMethods = [
-    {
-      name: 'Stir-fry',
-      instructions: [
-        'Heat 2 tablespoons of oil in a large wok or heavy-bottomed skillet over high heat until shimmering.',
-        'Add aromatics (garlic, ginger, onions) and stir-fry for 30 seconds until fragrant and slightly golden.',
-        'Add the hardest vegetables first (carrots, broccoli stems) and stir-fry for 2-3 minutes until they start to soften.',
-        'Add protein and cook for 3-4 minutes, stirring constantly, until almost cooked through.',
-        'Add softer vegetables and continue stir-frying for 2 minutes until crisp-tender.',
-        'Create a well in the center, add sauce ingredients, and let it bubble for 30 seconds.',
-        'Toss everything together and add fresh herbs, then serve immediately over steamed rice or noodles.'
-      ]
-    },
+  let cookingMethods = [];
+  
+  if (primaryType === 'fruits') {
+    cookingMethods = [
+      {
+        name: 'Smoothie Bowl',
+        instructions: [
+          'Add all fruits to a high-powered blender with a splash of liquid (milk, yogurt, or juice).',
+          'Blend on high speed for 60-90 seconds until completely smooth and creamy.',
+          'Taste and adjust sweetness with honey or maple syrup if needed.',
+          'Pour into a bowl and add toppings like granola, nuts, seeds, or coconut flakes.',
+          'Serve immediately while cold and fresh.',
+          'Garnish with fresh fruit slices and a drizzle of honey for presentation.'
+        ]
+      },
+      {
+        name: 'Fruit Crumble',
+        instructions: [
+          'Preheat oven to 375°F (190°C) and prepare a baking dish.',
+          'Mix fruits with sugar, lemon juice, and a pinch of salt in a large bowl.',
+          'Let the fruit mixture macerate for 15 minutes to release juices.',
+          'Combine flour, oats, brown sugar, and cold butter for the crumble topping.',
+          'Spread fruit mixture in the baking dish and top with crumble mixture.',
+          'Bake for 30-35 minutes until golden and bubbly.',
+          'Let cool for 10 minutes before serving with ice cream or whipped cream.'
+        ]
+      },
+      {
+        name: 'Fruit Salad',
+        instructions: [
+          'Wash and prepare all fruits by cutting into bite-sized pieces.',
+          'Combine fruits in a large bowl and gently toss to mix.',
+          'Make a simple dressing with lemon juice, honey, and a pinch of salt.',
+          'Drizzle dressing over fruits and toss gently to coat.',
+          'Chill in refrigerator for 30 minutes to allow flavors to meld.',
+          'Serve cold, garnished with fresh mint leaves or coconut flakes.'
+        ]
+      }
+    ];
+  } else {
+    cookingMethods = [
+      {
+        name: 'Stir-fry',
+        instructions: [
+          'Heat 2 tablespoons of oil in a large wok or heavy-bottomed skillet over high heat until shimmering.',
+          'Add aromatics (garlic, ginger, onions) and stir-fry for 30 seconds until fragrant and slightly golden.',
+          'Add the hardest vegetables first (carrots, broccoli stems) and stir-fry for 2-3 minutes until they start to soften.',
+          'Add protein and cook for 3-4 minutes, stirring constantly, until almost cooked through.',
+          'Add softer vegetables and continue stir-frying for 2 minutes until crisp-tender.',
+          'Create a well in the center, add sauce ingredients, and let it bubble for 30 seconds.',
+          'Toss everything together and add fresh herbs, then serve immediately over steamed rice or noodles.'
+        ]
+      },
     {
       name: 'One-pot',
       instructions: [
@@ -456,6 +577,7 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
       ]
     }
   ];
+  }
   
   // Generate the requested number of recipe variations
   for (let i = 0; i < variations; i++) {
@@ -467,35 +589,52 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
     
     // Create a recipe name with more variety and sophistication
     const mainIngredient = ingredients[0] || 'Mixed';
-    const dishTypes = [
-      'Mediterranean Bowl', 'Rustic Skillet', 'Heritage Casserole', 'Garden Salad', 
-      'Hearty Soup', 'Artisan Pasta', 'Gourmet Wrap', 'Fusion Stir-fry', 
-      'Slow-braised Stew', 'Charred Grill Platter', 'One-pot Wonder', 'Sheet Pan Feast'
-    ];
+    let dishTypes = [];
+    
+    if (primaryType === 'fruits') {
+      dishTypes = [
+        'Smoothie Bowl', 'Fruit Crumble', 'Fresh Salad', 'Parfait', 
+        'Compote', 'Tart', 'Sorbet', 'Fruit Bowl', 
+        'Cobbler', 'Fruit Pizza', 'Smoothie', 'Fruit Salsa'
+      ];
+    } else {
+      dishTypes = [
+        'Mediterranean Bowl', 'Rustic Skillet', 'Heritage Casserole', 'Garden Salad', 
+        'Hearty Soup', 'Artisan Pasta', 'Gourmet Wrap', 'Fusion Stir-fry', 
+        'Slow-braised Stew', 'Charred Grill Platter', 'One-pot Wonder', 'Sheet Pan Feast'
+      ];
+    }
+    
     const dishType = dishTypes[i % dishTypes.length];
     const recipeName = `${cuisine} ${mainIngredient} ${dishType}`;
     
     // Generate different ingredient quantities and add sophisticated pantry staples
     const recipeIngredients = [];
-    const pantryStaples = [
-      ['2 tablespoons extra virgin olive oil', 'Sea salt and freshly ground black pepper', '1 teaspoon red pepper flakes', 'Fresh herbs for garnish'],
-      ['3 tablespoons unsalted butter', '4 cloves garlic, minced', '1 medium onion, diced', 'Kosher salt and white pepper', '1 tablespoon fresh thyme'],
-      ['2 tablespoons avocado oil', '2 teaspoons smoked paprika', '1 teaspoon ground cumin', '1 bay leaf', 'Salt and pepper to taste'],
-      ['3 tablespoons olive oil', '2 tablespoons fresh lemon juice', '1 tablespoon balsamic vinegar', '1 teaspoon honey', 'Fresh basil and parsley'],
-      ['2 tablespoons ghee', '1 tablespoon garam masala', '1 teaspoon turmeric', '1 inch fresh ginger, grated', 'Cilantro for garnish'],
-      ['2 tablespoons sesame oil', '2 tablespoons soy sauce', '1 tablespoon rice vinegar', '1 teaspoon sriracha', 'Green onions and sesame seeds'],
-      ['3 tablespoons coconut oil', '1 can coconut milk', '2 teaspoons curry powder', '1 tablespoon fish sauce', 'Fresh lime and cilantro'],
-      ['2 tablespoons duck fat', '1 cup dry white wine', '2 sprigs rosemary', '1 teaspoon juniper berries', 'Coarse sea salt']
-      ['1 tablespoon olive oil', 'Salt and pepper to taste'],
-      ['2 teaspoons butter', '1 clove garlic, minced'],
-      ['1 tablespoon vegetable oil', '1 teaspoon dried oregano'],
-      ['1 tablespoon lemon juice', '1 teaspoon parsley flakes'],
-      ['1 teaspoon paprika', '1 teaspoon onion powder', 'Pinch of sugar']
-      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon dried herbs (optional)'],
-      ['1 tablespoon oil', 'Salt and pepper to taste', '1 tablespoon lemon juice (optional)'],
-      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon paprika (optional)'],
-      ['1 tablespoon oil', 'Salt and pepper to taste', '1 teaspoon oregano (optional)']
-    ];
+    let pantryStaples = [];
+    
+    if (primaryType === 'fruits') {
+      pantryStaples = [
+        ['2 tablespoons honey', '1 teaspoon vanilla extract', 'Pinch of salt', 'Fresh mint leaves for garnish'],
+        ['1/2 cup granola', '2 tablespoons Greek yogurt', '1 tablespoon chia seeds', 'Coconut flakes for topping'],
+        ['1/4 cup brown sugar', '2 tablespoons all-purpose flour', '1 teaspoon cinnamon', 'Vanilla ice cream for serving'],
+        ['1/4 cup maple syrup', '1 tablespoon lemon juice', '1 teaspoon ginger, grated', 'Fresh berries for garnish'],
+        ['1/2 cup oats', '2 tablespoons almond butter', '1 tablespoon flax seeds', 'Dark chocolate chips'],
+        ['1/4 cup coconut milk', '1 tablespoon agave nectar', '1 teaspoon cardamom', 'Toasted coconut for topping'],
+        ['1/2 cup Greek yogurt', '2 tablespoons honey', '1 teaspoon vanilla', 'Granola and nuts for crunch'],
+        ['1/4 cup sugar', '1 tablespoon cornstarch', '1 teaspoon lemon zest', 'Whipped cream for serving']
+      ];
+    } else {
+      pantryStaples = [
+        ['2 tablespoons extra virgin olive oil', 'Sea salt and freshly ground black pepper', '1 teaspoon red pepper flakes', 'Fresh herbs for garnish'],
+        ['3 tablespoons unsalted butter', '4 cloves garlic, minced', '1 medium onion, diced', 'Kosher salt and white pepper', '1 tablespoon fresh thyme'],
+        ['2 tablespoons avocado oil', '2 teaspoons smoked paprika', '1 teaspoon ground cumin', '1 bay leaf', 'Salt and pepper to taste'],
+        ['3 tablespoons olive oil', '2 tablespoons fresh lemon juice', '1 tablespoon balsamic vinegar', '1 teaspoon honey', 'Fresh basil and parsley'],
+        ['2 tablespoons ghee', '1 tablespoon garam masala', '1 teaspoon turmeric', '1 inch fresh ginger, grated', 'Cilantro for garnish'],
+        ['2 tablespoons sesame oil', '2 tablespoons soy sauce', '1 tablespoon rice vinegar', '1 teaspoon sriracha', 'Green onions and sesame seeds'],
+        ['3 tablespoons coconut oil', '1 can coconut milk', '2 teaspoons curry powder', '1 tablespoon fish sauce', 'Fresh lime and cilantro'],
+        ['2 tablespoons duck fat', '1 cup dry white wine', '2 sprigs rosemary', '1 teaspoon juniper berries', 'Coarse sea salt']
+      ];
+    }
     
     // Add main ingredients with varied quantities
     ingredients.forEach((ingredient, index) => {
@@ -512,63 +651,71 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
     recipeIngredients.push(...selectedPantry);
     
     // Generate sophisticated, detailed instructions based on cooking method
-    const instructions = cookingMethod.instructions.map((step, stepIndex) => {
-      if (stepIndex === 1) { // Customize the aromatics step
-        const aromatics = [
-          'diced yellow onion and minced garlic',
-          'thinly sliced shallots and grated ginger', 
-          'chopped leeks and crushed garlic cloves',
-          'diced red bell pepper and minced garlic',
-          'sliced fennel and minced shallots',
-          'chopped celery and minced garlic'
-        ];
-        const selectedAromatic = aromatics[i % aromatics.length];
-        return `Add ${selectedAromatic} and cook, stirring frequently, until softened and aromatic, about 3-4 minutes.`;
-      } else if (stepIndex === 2) { // Customize the main cooking step
-        const mainIngredient = ingredients[0] || 'main ingredients';
-        const cookingTimes = [Math.floor(cookingTimeMinutes / 6), Math.floor(cookingTimeMinutes / 5), Math.floor(cookingTimeMinutes / 4)];
-        const selectedTime = cookingTimes[i % cookingTimes.length];
-        const techniques = [
-          'sear until golden brown on all sides',
-          'cook until lightly caramelized and tender',
-          'brown until crispy edges form',
-          'cook until opaque and slightly firm',
-          'sauté until just beginning to soften'
-        ];
-        const selectedTechnique = techniques[i % techniques.length];
-        return `Add ${mainIngredient} and ${selectedTechnique}, about ${selectedTime} minutes, stirring occasionally.`;
-      } else if (stepIndex === 3) { // Customize the liquid/sauce step
-        const liquids = [
-          'rich chicken or vegetable broth',
-          'dry white wine or vermouth', 
-          'coconut milk and fish sauce',
-          'crushed tomatoes and red wine',
-          'bone broth and apple cider vinegar',
-          'heavy cream and brandy'
-        ];
-        const selectedLiquid = liquids[i % liquids.length];
-        const techniques = [
-          'bring to a gentle boil, then reduce heat',
-          'simmer uncovered until reduced by half',
-          'bring to a rolling boil, then immediately reduce',
-          'heat until just below boiling point',
-          'bring to a vigorous boil, then lower heat'
-        ];
-        const selectedTechnique = techniques[i % techniques.length];
-        return `Add ${selectedLiquid} and ${selectedTechnique} for 2-3 minutes.`;
-      } else if (stepIndex === 4) { // Add more detailed finishing steps
-        const finishingTouches = [
-          'Taste and adjust seasoning with salt, pepper, and a splash of acid (lemon juice or vinegar).',
-          'Finish with a drizzle of high-quality olive oil and fresh herbs just before serving.',
-          'Garnish with toasted nuts, seeds, or crispy shallots for texture and visual appeal.',
-          'Add a final squeeze of citrus and a pinch of flaky sea salt to brighten the flavors.',
-          'Let the dish rest for 5 minutes to allow flavors to meld before serving.',
-          'Check for proper seasoning and add a touch of sweetness if needed (honey or maple syrup).'
-        ];
-        return finishingTouches[i % finishingTouches.length];
-      }
-      return step;
-    });
+    let instructions;
+    
+    if (primaryType === 'fruits') {
+      // For fruit recipes, use the cooking method instructions directly
+      instructions = cookingMethod.instructions;
+    } else {
+      // For savory recipes, customize the instructions
+      instructions = cookingMethod.instructions.map((step, stepIndex) => {
+        if (stepIndex === 1) { // Customize the aromatics step
+          const aromatics = [
+            'diced yellow onion and minced garlic',
+            'thinly sliced shallots and grated ginger', 
+            'chopped leeks and crushed garlic cloves',
+            'diced red bell pepper and minced garlic',
+            'sliced fennel and minced shallots',
+            'chopped celery and minced garlic'
+          ];
+          const selectedAromatic = aromatics[i % aromatics.length];
+          return `Add ${selectedAromatic} and cook, stirring frequently, until softened and aromatic, about 3-4 minutes.`;
+        } else if (stepIndex === 2) { // Customize the main cooking step
+          const mainIngredient = ingredients[0] || 'main ingredients';
+          const cookingTimes = [Math.floor(cookingTimeMinutes / 6), Math.floor(cookingTimeMinutes / 5), Math.floor(cookingTimeMinutes / 4)];
+          const selectedTime = cookingTimes[i % cookingTimes.length];
+          const techniques = [
+            'sear until golden brown on all sides',
+            'cook until lightly caramelized and tender',
+            'brown until crispy edges form',
+            'cook until opaque and slightly firm',
+            'sauté until just beginning to soften'
+          ];
+          const selectedTechnique = techniques[i % techniques.length];
+          return `Add ${mainIngredient} and ${selectedTechnique}, about ${selectedTime} minutes, stirring occasionally.`;
+        } else if (stepIndex === 3) { // Customize the liquid/sauce step
+          const liquids = [
+            'rich chicken or vegetable broth',
+            'dry white wine or vermouth', 
+            'coconut milk and fish sauce',
+            'crushed tomatoes and red wine',
+            'bone broth and apple cider vinegar',
+            'heavy cream and brandy'
+          ];
+          const selectedLiquid = liquids[i % liquids.length];
+          const techniques = [
+            'bring to a gentle boil, then reduce heat',
+            'simmer uncovered until reduced by half',
+            'bring to a rolling boil, then immediately reduce',
+            'heat until just below boiling point',
+            'bring to a vigorous boil, then lower heat'
+          ];
+          const selectedTechnique = techniques[i % techniques.length];
+          return `Add ${selectedLiquid} and ${selectedTechnique} for 2-3 minutes.`;
+        } else if (stepIndex === 4) { // Add more detailed finishing steps
+          const finishingTouches = [
+            'Taste and adjust seasoning with salt, pepper, and a splash of acid (lemon juice or vinegar).',
+            'Finish with a drizzle of high-quality olive oil and fresh herbs just before serving.',
+            'Garnish with toasted nuts, seeds, or crispy shallots for texture and visual appeal.',
+            'Add a final squeeze of citrus and a pinch of flaky sea salt to brighten the flavors.',
+            'Let the dish rest for 5 minutes to allow flavors to meld before serving.',
+            'Check for proper seasoning and add a touch of sweetness if needed (honey or maple syrup).'
+          ];
+          return finishingTouches[i % finishingTouches.length];
+        }
+        return step;
+      });
+    }
     
     recipes.push({
       id,
@@ -586,8 +733,5 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Server listening on 
-    http://localhost:${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
-
-
