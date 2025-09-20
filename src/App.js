@@ -27,40 +27,49 @@ function App() {
     }
   }, []);
 
-  const generateRecipe = useCallback(() => {
+  const generateRecipe = useCallback(async () => {
     if (!image) return;
     
     setIsLoading(true);
-    // TODO: Implement actual API call to your AI service
-    setTimeout(() => {
-      const timeInput = cookingTime.trim() || '20';
-      const cuisineInput = cuisineKeywords.trim() || 'Italian';
+    
+    try {
+      const response = await fetch("http://localhost:3001/api/generate-recipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ingredients: ["pasta", "tomato", "garlic"], // placeholder list for now
+          cuisine: cuisineKeywords.trim() || "Italian",
+          targetTime: cookingTime ? parseInt(cookingTime, 10) : 20,
+          variations: 1
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      const newRecipe = {
-        name: `${cuisineInput} Style Pasta Primavera`,
-        ingredients: [
-          '200g pasta',
-          '1 cup mixed vegetables (bell peppers, zucchini, carrots)',
-          '2 cloves garlic, minced',
-          '2 tbsp olive oil',
-          'Salt and pepper to taste',
-          'Grated parmesan for serving'
-        ],
-        instructions: [
-          'Cook pasta according to package instructions.',
-          'In a large pan, heat olive oil over medium heat.',
-          'Add minced garlic and sauté until fragrant.',
-          'Add mixed vegetables and cook until tender.',
-          'Drain pasta and add to the pan with vegetables.',
-          'Toss everything together and season with salt and pepper.',
-          'Serve hot with grated parmesan.'
-        ],
-        cookingTime: `${timeInput} minutes`,
-        difficulty: 'Easy'
-      };
-      setRecipe(newRecipe);
+      // Validate that data.recipes exists
+      if (!data.recipes || !Array.isArray(data.recipes) || data.recipes.length === 0) {
+        throw new Error('Invalid response format: no recipes found');
+      }
+
+      // Show the first recipe
+      setRecipe(data.recipes[0]);
+      
+    } catch (error) {
+      console.error('Error generating recipe:', error);
+      setRecipe({ 
+        name: "Error generating recipe",
+        ingredients: ["Unable to generate recipe"],
+        instructions: ["Please try again later"],
+        cookingTime: "0 minutes",
+        difficulty: "Error"
+      });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   }, [image, cookingTime, cuisineKeywords]);
 
   const handleEditIngredients = useCallback(() => {
