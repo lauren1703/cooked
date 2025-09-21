@@ -153,7 +153,7 @@ const RecipeOptionsScreen = () => {
                   {(() => {
                     const feasibility = checkIngredientFeasibility(recipe.ingredients, editedIngredients);
                     const getFeasibilityData = (percentage) => {
-                      if (percentage >= 80) {
+                      if (percentage >= 66) {
                         return {
                           color: '#4CAF50',
                           bgColor: '#E8F5E8',
@@ -161,7 +161,7 @@ const RecipeOptionsScreen = () => {
                           icon: '✅',
                           borderColor: '#4CAF50'
                         };
-                      } else if (percentage >= 60) {
+                      } else if (percentage >= 33) {
                         return {
                           color: '#FF9800',
                           bgColor: '#FFF3E0',

@@ -207,8 +207,8 @@ const RecipeView = ({
                           className="feasibility-progress-fill" 
                           style={{ 
                             width: `${feasibility.percentage}%`,
-                            backgroundColor: feasibility.percentage >= 80 ? '#4CAF50' : 
-                                           feasibility.percentage >= 60 ? '#FF9800' : '#F44336'
+                            backgroundColor: feasibility.percentage >= 66 ? '#4CAF50' : 
+                                           feasibility.percentage >= 33 ? '#FF9800' : '#F44336'
                           }}
                         ></div>
                       </div>

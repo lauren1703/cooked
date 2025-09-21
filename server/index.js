@@ -584,7 +584,23 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations, i
     const id = `fallback-${i + 1}`;
     const type = types[i % types.length];
     const difficulty = difficulties[i % difficulties.length];
-    const cookingMethod = cookingMethods[i % cookingMethods.length];
+    
+    // Select cooking method based on ingredient type and recipe index
+    let cookingMethod;
+    if (primaryType === 'fruits') {
+      // For fruits, use appropriate methods: blending, baking, no-cook
+      const fruitMethods = cookingMethods.filter(method => 
+        ['Smoothie Bowl', 'Fruit Crumble', 'Fruit Salad'].includes(method.name)
+      );
+      cookingMethod = fruitMethods[i % fruitMethods.length] || cookingMethods[0];
+    } else {
+      // For savory ingredients, use appropriate cooking methods
+      const savoryMethods = cookingMethods.filter(method => 
+        !['Smoothie Bowl', 'Fruit Crumble', 'Fruit Salad'].includes(method.name)
+      );
+      cookingMethod = savoryMethods[i % savoryMethods.length] || cookingMethods[0];
+    }
+    
     const cookingTimeMinutes = Math.min(Math.max(targetTime - 5 + (i * 10), 10), 120);
     
     // Create a recipe name with more variety and sophistication
@@ -595,18 +611,82 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations, i
       dishTypes = [
         'Smoothie Bowl', 'Fruit Crumble', 'Fresh Salad', 'Parfait', 
         'Compote', 'Tart', 'Sorbet', 'Fruit Bowl', 
-        'Cobbler', 'Fruit Pizza', 'Smoothie', 'Fruit Salsa'
+        'Cobbler', 'Fruit Pizza', 'Smoothie', 'Fruit Salsa',
+        'Fruit Smoothie', 'Berry Parfait', 'Fruit Tart', 'Fruit Compote',
+        'Fruit Sorbet', 'Fruit Cobbler', 'Fruit Salad', 'Fruit Bowl',
+        'Fruit Smoothie Bowl', 'Fruit Crumble', 'Fruit Parfait', 'Fruit Tart'
+      ];
+    } else if (primaryType === 'vegetables') {
+      dishTypes = [
+        'Garden Salad', 'Roasted Vegetables', 'Vegetable Soup', 'Stir-fry',
+        'Grilled Vegetables', 'Vegetable Pasta', 'Vegetable Curry', 'Vegetable Stew',
+        'Vegetable Wrap', 'Vegetable Pizza', 'Vegetable Quiche', 'Vegetable Risotto',
+        'Vegetable Tacos', 'Vegetable Stir-fry', 'Vegetable Soup', 'Vegetable Salad',
+        'Vegetable Pasta', 'Vegetable Curry', 'Vegetable Stew', 'Vegetable Wrap'
+      ];
+    } else if (primaryType === 'proteins') {
+      dishTypes = [
+        'Grilled Protein', 'Protein Bowl', 'Protein Pasta', 'Protein Stir-fry',
+        'Protein Curry', 'Protein Stew', 'Protein Tacos', 'Protein Salad',
+        'Protein Wrap', 'Protein Pizza', 'Protein Risotto', 'Protein Soup',
+        'Protein Skillet', 'Protein Casserole', 'Protein Platter', 'Protein Feast'
       ];
     } else {
       dishTypes = [
         'Mediterranean Bowl', 'Rustic Skillet', 'Heritage Casserole', 'Garden Salad', 
         'Hearty Soup', 'Artisan Pasta', 'Gourmet Wrap', 'Fusion Stir-fry', 
-        'Slow-braised Stew', 'Charred Grill Platter', 'One-pot Wonder', 'Sheet Pan Feast'
+        'Slow-braised Stew', 'Charred Grill Platter', 'One-pot Wonder', 'Sheet Pan Feast',
+        'Gourmet Bowl', 'Artisan Skillet', 'Heritage Stew', 'Fusion Bowl',
+        'Mediterranean Pasta', 'Rustic Soup', 'Heritage Wrap', 'Garden Stir-fry'
       ];
     }
     
-    const dishType = dishTypes[i % dishTypes.length];
-    const recipeName = `${cuisine} ${mainIngredient} ${dishType}`;
+    // Select dish type based on ingredient analysis and recipe index for variety
+    let dishType;
+    if (primaryType === 'fruits') {
+      // For fruits, prioritize based on ingredient combinations
+      if (ingredients.some(ing => ['banana', 'strawberry', 'blueberry'].includes(ing.toLowerCase()))) {
+        const berryPriorities = ['Smoothie Bowl', 'Fruit Crumble', 'Fresh Salad', 'Parfait', 'Compote', 'Tart'];
+        dishType = i < berryPriorities.length ? berryPriorities[i] : dishTypes[i % dishTypes.length];
+      } else if (ingredients.some(ing => ['apple', 'pear'].includes(ing.toLowerCase()))) {
+        const applePriorities = ['Fruit Crumble', 'Tart', 'Compote', 'Smoothie Bowl', 'Fresh Salad', 'Parfait'];
+        dishType = i < applePriorities.length ? applePriorities[i] : dishTypes[i % dishTypes.length];
+      } else {
+        const fruitPriorities = ['Smoothie Bowl', 'Fruit Crumble', 'Fresh Salad', 'Parfait', 'Compote', 'Tart'];
+        dishType = i < fruitPriorities.length ? fruitPriorities[i] : dishTypes[i % dishTypes.length];
+      }
+    } else if (primaryType === 'vegetables') {
+      // For vegetables, prioritize based on ingredient types
+      if (ingredients.some(ing => ['tomato', 'onion', 'garlic'].includes(ing.toLowerCase()))) {
+        const tomatoPriorities = ['Garden Salad', 'Roasted Vegetables', 'Vegetable Soup', 'Stir-fry', 'Grilled Vegetables', 'Vegetable Pasta'];
+        dishType = i < tomatoPriorities.length ? tomatoPriorities[i] : dishTypes[i % dishTypes.length];
+      } else if (ingredients.some(ing => ['carrot', 'celery', 'potato'].includes(ing.toLowerCase()))) {
+        const rootPriorities = ['Vegetable Soup', 'Roasted Vegetables', 'Vegetable Stew', 'Garden Salad', 'Stir-fry', 'Grilled Vegetables'];
+        dishType = i < rootPriorities.length ? rootPriorities[i] : dishTypes[i % dishTypes.length];
+      } else {
+        const vegPriorities = ['Garden Salad', 'Roasted Vegetables', 'Vegetable Soup', 'Stir-fry', 'Grilled Vegetables', 'Vegetable Pasta'];
+        dishType = i < vegPriorities.length ? vegPriorities[i] : dishTypes[i % dishTypes.length];
+      }
+    } else if (primaryType === 'proteins') {
+      // For proteins, prioritize based on protein type
+      if (ingredients.some(ing => ['chicken', 'turkey'].includes(ing.toLowerCase()))) {
+        const poultryPriorities = ['Grilled Protein', 'Protein Bowl', 'Protein Pasta', 'Protein Stir-fry', 'Protein Curry', 'Protein Salad'];
+        dishType = i < poultryPriorities.length ? poultryPriorities[i] : dishTypes[i % dishTypes.length];
+      } else if (ingredients.some(ing => ['beef', 'pork', 'lamb'].includes(ing.toLowerCase()))) {
+        const meatPriorities = ['Grilled Protein', 'Protein Stew', 'Protein Skillet', 'Protein Bowl', 'Protein Pasta', 'Protein Curry'];
+        dishType = i < meatPriorities.length ? meatPriorities[i] : dishTypes[i % dishTypes.length];
+      } else {
+        const proteinPriorities = ['Grilled Protein', 'Protein Bowl', 'Protein Pasta', 'Protein Stir-fry', 'Protein Curry', 'Protein Salad'];
+        dishType = i < proteinPriorities.length ? proteinPriorities[i] : dishTypes[i % dishTypes.length];
+      }
+    } else {
+      // For general/mixed ingredients, use intelligent selection
+      const generalPriorities = ['Mediterranean Bowl', 'Rustic Skillet', 'Heritage Casserole', 'Garden Salad', 'Hearty Soup', 'Artisan Pasta'];
+      dishType = i < generalPriorities.length ? generalPriorities[i] : dishTypes[i % dishTypes.length];
+    }
+    // Capitalize the main ingredient properly
+    const capitalizedIngredient = mainIngredient.charAt(0).toUpperCase() + mainIngredient.slice(1).toLowerCase();
+    const recipeName = `${capitalizedIngredient} ${dishType}`;
     
     // Generate different ingredient quantities and add sophisticated pantry staples
     const recipeIngredients = [];
@@ -646,7 +726,7 @@ function generateFallbackRecipes(ingredients, cuisine, targetTime, variations, i
       recipeIngredients.push(`${quantity} ${unitText} of ${ingredient}`);
     });
     
-    // Add different pantry staples for each recipe
+    // Add appropriate pantry staples based on ingredient type and recipe index
     const selectedPantry = pantryStaples[i % pantryStaples.length];
     recipeIngredients.push(...selectedPantry);
     
